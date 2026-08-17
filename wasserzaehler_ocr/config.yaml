@@ -1,5 +1,5 @@
 name: "Wasserzähler Rotate & OCR"
-version: "4.9.0"
+version: "4.10.0"
 slug: "wasserzaehler_ocr"
 description: "Holt das Bild von der HA-Kamera, rotiert und schneidet es zu und liest den Wasserzähler per ausgelagertem Ollama-Vision-Modell aus – vollständig konfigurierbar"
 arch:

@@ -84,10 +84,34 @@ logging.basicConfig(
 )
 _LOGGER = logging.getLogger("wasserzaehler")
 
+# Ringpuffer der letzten Log-Zeilen (fuer die Anzeige auf der Uebersichtsseite)
+from collections import deque
+from datetime import datetime
+_LOG_BUFFER = deque(maxlen=60)
+
+# Live-Prozessstatus, den die Uebersichtsseite pollt
+PROCESS_STATE = {
+    "running": False,
+    "phase": "idle",          # idle | fetch | rotate | ocr | plausibility | done | error
+    "phase_text": "bereit",
+    "started_at": None,
+    "finished_at": None,
+    "last_result": None,      # letztes /process-Ergebnis-dict
+}
+
 
 def log(msg: str) -> None:
-    """Schreibt eine Zeile ins Add-on-Protokoll (stdout)."""
+    """Schreibt eine Zeile ins Add-on-Protokoll (stdout) und in den Puffer."""
     _LOGGER.info(msg)
+    stamp = datetime.now().strftime("%H:%M:%S")
+    _LOG_BUFFER.append(f"{stamp}  {msg}")
+
+
+def set_phase(phase: str, text: str) -> None:
+    """Aktualisiert den Live-Prozessstatus."""
+    PROCESS_STATE["phase"] = phase
+    PROCESS_STATE["phase_text"] = text
+    log(f"[Phase] {text}")
 
 
 app = Flask(__name__)
@@ -96,6 +120,9 @@ app = Flask(__name__)
 @app.route("/process", methods=["GET"])
 def process():
     log("--- Start /process ---")
+    PROCESS_STATE["running"] = True
+    PROCESS_STATE["started_at"] = time.time()
+    PROCESS_STATE["finished_at"] = None
     try:
         # 1. Bild von der Kamera holen
         # Wenn save_source aktiv ist, legen wir das Rohbild unter src_path ab,
@@ -109,13 +136,16 @@ def process():
         try:
             # Lampe an, kurz warten bis sie voll ausgeleuchtet ist
             if light_entity:
+                set_phase("fetch", "Lampe an, warte auf Ausleuchtung …")
                 fetch_image.set_light(light_entity, True,
                                       timeout=15, log=log)
                 if warmup > 0:
-                    log(f"Warte {warmup}s auf Ausleuchtung ...")
                     time.sleep(warmup)
+            else:
+                set_phase("fetch", "Hole Bild von der Kamera …")
 
             # Bild holen
+            set_phase("fetch", "Hole Bild von der Kamera …")
             fetch_image.fetch_camera_image(
                 camera_entity=OPTS["camera_entity"],
                 dst_path=raw_target,
@@ -130,6 +160,7 @@ def process():
 
         # 2. Rotation + Zuschnitt (Rohbild -> dst_path)
         # Effektive Werte: Add-on-Optionen, ueberschrieben von Tuner-Werten
+        set_phase("rotate", "Rotiere und schneide zu …")
         eff = tuning.effective(OPTS, Path(OPTS["tuning_path"]), log)
         rotate.rotate_and_crop(
             src_path=raw_target,
@@ -146,6 +177,7 @@ def process():
         )
 
         # 3. OCR ueber ausgelagerten Ollama-Server
+        set_phase("ocr", f"OCR läuft ({OPTS['ollama_model']}) …")
         result = ollama_ocr.read_digits_ollama(
             image_path=OPTS["dst_path"],
             ollama_url=OPTS["ollama_url"],
@@ -159,6 +191,7 @@ def process():
         )
 
         log(f"OCR-Ergebnis: {result}")
+        set_phase("plausibility", "Prüfe Plausibilität …")
 
         # 4. Zustand laden (letzter Wert, Zeit, Fehlerzaehler)
         state_path = Path(OPTS["last_value_path"])
@@ -234,6 +267,11 @@ def process():
             }, log)
 
         log(f"Ergebnis: {result}")
+        # Zeitpunkt der letzten erfolgreichen Ablesung merken
+        if result.get("raw_digits") is not None and not result.get("held"):
+            result["last_read_at"] = now
+        set_phase("done", "Fertig.")
+        PROCESS_STATE["last_result"] = result
         # Status 200, solange ein gueltiger (frischer ODER gehaltener) Wert
         # vorliegt. Nur ganz ohne Wert (erster Lauf gescheitert) -> 422.
         status = 200 if result.get("value") is not None else 422
@@ -241,14 +279,29 @@ def process():
 
     except FileNotFoundError as exc:
         log(f"FEHLER: {exc}")
-        return jsonify({"raw_digits": None, "error": str(exc)}), 404
+        set_phase("error", f"Fehler: {exc}")
+        err = {"raw_digits": None, "value": None, "error": str(exc),
+               "status": str(exc)}
+        PROCESS_STATE["last_result"] = err
+        return jsonify(err), 404
     except ValueError as exc:
         log(f"FEHLER: {exc}")
-        return jsonify({"raw_digits": None, "error": str(exc)}), 400
+        set_phase("error", f"Fehler: {exc}")
+        err = {"raw_digits": None, "value": None, "error": str(exc),
+               "status": str(exc)}
+        PROCESS_STATE["last_result"] = err
+        return jsonify(err), 400
     except Exception:
         tb = traceback.format_exc()
         log("UNBEHANDELTER FEHLER:\n" + tb)
-        return jsonify({"raw_digits": None, "error": "interner Fehler"}), 500
+        set_phase("error", "interner Fehler")
+        err = {"raw_digits": None, "value": None, "error": "interner Fehler",
+               "status": "interner Fehler"}
+        PROCESS_STATE["last_result"] = err
+        return jsonify(err), 500
+    finally:
+        PROCESS_STATE["running"] = False
+        PROCESS_STATE["finished_at"] = time.time()
 
 
 @app.route("/health", methods=["GET"])
@@ -304,6 +357,68 @@ def tuner_dst():
     if not dst.exists():
         return "kein Ergebnisbild vorhanden", 404
     return send_file(str(dst), mimetype="image/jpeg")
+
+
+@app.route("/status", methods=["GET"])
+def status_endpoint():
+    """Live-Prozessstatus + letztes Ergebnis + Zustand fuer die Uebersicht."""
+    state = plausibility.load_state(Path(OPTS["last_value_path"]), log)
+    running = PROCESS_STATE["running"]
+    elapsed = None
+    if PROCESS_STATE["started_at"]:
+        end = PROCESS_STATE["finished_at"] or time.time()
+        elapsed = round(end - PROCESS_STATE["started_at"], 1)
+    return jsonify({
+        "running": running,
+        "phase": PROCESS_STATE["phase"],
+        "phase_text": PROCESS_STATE["phase_text"],
+        "elapsed_s": elapsed,
+        "last_result": PROCESS_STATE["last_result"],
+        "stored_value": state["value"],
+        "stored_timestamp": state["timestamp"],
+        "error_count": state["error_count"],
+        "now": time.time(),
+    })
+
+
+@app.route("/logs", methods=["GET"])
+def logs_endpoint():
+    """Die letzten Log-Zeilen (fuer die Anzeige auf der Uebersichtsseite)."""
+    return jsonify({"lines": list(_LOG_BUFFER)})
+
+
+@app.route("/ollama_status", methods=["GET"])
+def ollama_status():
+    """Prueft, ob Ollama erreichbar ist und ob das Modell vorhanden ist."""
+    import urllib.request
+    import urllib.error
+
+    # Aus der generate-URL die Basis ableiten (…/api/generate -> …/api/tags)
+    base = OPTS["ollama_url"].replace("/api/generate", "")
+    tags_url = f"{base}/api/tags"
+    model = OPTS["ollama_model"]
+    try:
+        with urllib.request.urlopen(tags_url, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+        names = [m.get("name", "") for m in data.get("models", [])]
+        # Modell kann mit oder ohne :tag angegeben sein
+        model_present = any(
+            n == model or n.split(":")[0] == model.split(":")[0]
+            for n in names
+        )
+        return jsonify({
+            "reachable": True,
+            "model": model,
+            "model_present": model_present,
+            "available_models": names,
+        })
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({
+            "reachable": False,
+            "model": model,
+            "model_present": False,
+            "error": str(exc),
+        })
 
 
 @app.route("/tuner", methods=["GET"])

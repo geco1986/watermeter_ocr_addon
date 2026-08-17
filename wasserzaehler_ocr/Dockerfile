@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-LABEL io.hass.version="4.9.0" \
+LABEL io.hass.version="4.10.0" \
       io.hass.type="app" \
       io.hass.arch="amd64|aarch64"
 

@@ -7,44 +7,49 @@
 <title>Wasserzähler OCR</title>
 <style>
   :root { --bg:#0f1419; --card:#1a2129; --fg:#e6edf3; --muted:#8b98a5;
-          --accent:#1a6fc4; --accent2:#2f81f7; --ok:#2ea043; --warn:#e23b3b; }
+          --accent:#1a6fc4; --accent2:#2f81f7; --ok:#2ea043; --warn:#e23b3b; --amber:#d29922; }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg);
          font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  .wrap { max-width:720px; margin:0 auto; padding:24px; }
-  header { display:flex; align-items:center; gap:14px; margin-bottom:8px; }
-  .drop { width:44px; height:44px; flex:none; }
-  h1 { margin:0; font-size:20px; }
-  .sub { color:var(--muted); font-size:14px; margin:2px 0 24px; }
+  .wrap { max-width:900px; margin:0 auto; padding:20px; }
+  header { display:flex; align-items:center; gap:14px; margin-bottom:18px; }
+  .drop { width:40px; height:40px; flex:none; }
+  h1 { margin:0; font-size:19px; }
+  .sub { color:var(--muted); font-size:13px; margin-top:2px; }
   .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-  @media (max-width:560px){ .grid{ grid-template-columns:1fr; } }
-  .card { background:var(--card); border:1px solid #2a3441; border-radius:12px;
-          padding:20px; display:flex; flex-direction:column; gap:10px; }
-  .card h2 { margin:0; font-size:16px; }
-  .card p { margin:0; color:var(--muted); font-size:13px; flex:1; }
+  @media (max-width:640px){ .grid{ grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid #2a3441; border-radius:12px; padding:16px; margin-bottom:16px; }
+  .card h2 { margin:0 0 12px; font-size:13px; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
   button, a.btn { display:inline-block; text-align:center; text-decoration:none;
-          background:var(--accent); color:#fff; border:0; border-radius:8px;
-          padding:12px 16px; font-size:14px; cursor:pointer; }
+          background:var(--accent); color:#fff; border:0; border-radius:8px; padding:11px 16px; font-size:14px; cursor:pointer; }
   button:hover, a.btn:hover { background:var(--accent2); }
-  a.btn.ghost { background:transparent; border:1px solid #2a3441; color:var(--fg); }
-  .result { margin-top:20px; background:var(--card); border:1px solid #2a3441;
-            border-radius:12px; padding:18px; display:none; }
-  .result.show { display:block; }
-  .kv { display:flex; justify-content:space-between; padding:6px 0;
-        border-bottom:1px solid #222c36; font-size:14px; }
+  button:disabled { opacity:.6; cursor:default; }
+  a.btn.ghost, button.ghost { background:transparent; border:1px solid #2a3441; color:var(--fg); }
+  .btns { display:flex; gap:10px; flex-wrap:wrap; }
+  .kv { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #222c36; font-size:14px; gap:12px; }
   .kv:last-child { border-bottom:0; }
-  .kv .k { color:var(--muted); }
-  .kv .v { font-variant-numeric:tabular-nums; }
-  .status { margin-top:10px; font-size:13px; min-height:18px; }
-  .status.ok { color:var(--ok); } .status.err { color:var(--warn); }
-  .imgs { display:flex; gap:12px; flex-wrap:wrap; margin-top:14px; }
-  .imgs figure { margin:0; flex:1; min-width:160px; }
+  .kv .k { color:var(--muted); } .kv .v { font-variant-numeric:tabular-nums; text-align:right; }
+  .big { font-size:26px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .phase { display:flex; align-items:center; gap:10px; font-size:14px; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--muted); flex:none; }
+  .dot.run { background:var(--accent2); animation:pulse 1s infinite; }
+  .dot.ok { background:var(--ok); } .dot.err { background:var(--warn); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid #3a4551; border-top-color:var(--accent2); border-radius:50%; animation:s .8s linear infinite; }
+  @keyframes s { to { transform:rotate(360deg); } }
+  .imgs { display:flex; gap:12px; flex-wrap:wrap; }
+  .imgs figure { margin:0; flex:1; min-width:150px; }
   .imgs img { width:100%; border:1px solid #2a3441; border-radius:8px; background:#000; }
   .imgs figcaption { color:var(--muted); font-size:12px; margin-top:4px; text-align:center; }
-  .spin { display:inline-block; width:14px; height:14px; border:2px solid #3a4551;
-          border-top-color:var(--accent2); border-radius:50%; animation:s .8s linear infinite;
-          vertical-align:middle; margin-right:6px; }
-  @keyframes s { to { transform:rotate(360deg); } }
+  .status { font-size:13px; margin-top:10px; min-height:18px; }
+  .status.ok { color:var(--ok); } .status.err { color:var(--warn); } .status.amber { color:var(--amber); }
+  .errbox { background:#2a1416; border:1px solid #5a2a2a; color:#ffb4b4; border-radius:8px; padding:10px 12px; font-size:13px; margin-top:10px; display:none; white-space:pre-wrap; }
+  .errbox.show { display:block; }
+  input[type=number] { width:130px; background:#0d1117; color:var(--fg); border:1px solid #2a3441; border-radius:6px; padding:9px 10px; font-size:15px; }
+  .logbox { background:#0d1117; border:1px solid #2a3441; border-radius:8px; padding:10px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; line-height:1.5; max-height:220px; overflow:auto; color:#c9d4df; white-space:pre-wrap; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; }
+  .pill.ok { background:#132d1a; color:#4ae168; } .pill.err { background:#2d1313; color:#ff8080; }
+  .muted { color:var(--muted); font-size:12px; }
 </style>
 </head>
 <body>
@@ -56,80 +61,131 @@
       <rect x="116" y="132" width="26" height="34" fill="#fff"/>
       <rect x="146" y="132" width="26" height="34" fill="#e23b3b"/>
     </svg>
-    <div>
-      <h1>Wasserzähler OCR</h1>
-      <div class="sub">Ablesung starten oder das Kamerabild optimieren.</div>
-    </div>
+    <div><h1>Wasserzähler OCR</h1><div class="sub">Übersicht &amp; Steuerung</div></div>
   </header>
+
+  <div class="card">
+    <h2>Aktueller Stand</h2>
+    <div class="kv"><span class="k">Zählerstand</span><span class="v big" id="cur_value">–</span></div>
+    <div class="kv"><span class="k">Durchfluss</span><span class="v" id="cur_flow">–</span></div>
+    <div class="kv"><span class="k">Zuletzt erfolgreich gelesen</span><span class="v" id="cur_last">–</span></div>
+    <div class="kv"><span class="k">Fehlerzähler</span><span class="v" id="cur_errcount">–</span></div>
+    <div style="margin-top:14px" class="phase">
+      <span class="dot" id="phase_dot"></span><span id="phase_text">–</span>
+      <span class="muted" id="phase_elapsed"></span>
+    </div>
+    <div class="btns" style="margin-top:14px">
+      <button id="runBtn">Jetzt auswerten</button>
+      <a class="btn ghost" href="tuner">Bild optimieren (Tuner)</a>
+    </div>
+    <div class="errbox" id="errbox"></div>
+  </div>
 
   <div class="grid">
     <div class="card">
-      <h2>Auswertung starten</h2>
-      <p>Holt ein frisches Bild, liest den Zählerstand aus und zeigt das
-         Ergebnis mit Durchfluss und Status.</p>
-      <button id="runBtn">Jetzt auswerten</button>
+      <h2>Letztes Ergebnis</h2>
+      <div id="resultKvs"><div class="muted">Noch keine Auswertung in dieser Sitzung.</div></div>
     </div>
     <div class="card">
-      <h2>Bild optimieren</h2>
-      <p>Rotation und Zuschnitt live einstellen und als Standard speichern.</p>
-      <a class="btn ghost" href="tuner">Tuner öffnen</a>
+      <h2>Zählerstand überschreiben</h2>
+      <div class="muted">Vorbefüllt mit dem letzten ermittelten Wert. Anpassen und speichern,
+        z. B. nach einem blockierten großen Sprung.</div>
+      <div style="display:flex; gap:10px; margin-top:12px; align-items:center;">
+        <input type="number" id="setInput" step="0.001" min="0"><span class="muted">m³</span>
+      </div>
+      <div class="btns" style="margin-top:12px">
+        <button id="setBtn">Speichern</button>
+        <button id="fillLastBtn" class="ghost">Letzten Wert einsetzen</button>
+      </div>
+      <div class="status" id="setStatus"></div>
     </div>
   </div>
 
-  <div class="result" id="result">
-    <div id="kvs"></div>
+  <div class="card">
+    <h2>Bilder der letzten Analyse</h2>
     <div class="imgs">
-      <figure>
-        <img id="rotimg" alt="Zugeschnittenes Bild">
-        <figcaption>an die OCR gesendetes Bild</figcaption>
-      </figure>
+      <figure><img id="dstImg" alt="zugeschnitten"><figcaption>an die OCR gesendet (zugeschnitten)</figcaption></figure>
+      <figure><img id="srcImg" alt="Rohbild"><figcaption>Rohbild der Kamera</figcaption></figure>
     </div>
-    <div class="status" id="status"></div>
+    <div class="btns" style="margin-top:12px"><button id="refreshImgBtn" class="ghost">Bilder aktualisieren</button></div>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Ollama-Status</h2>
+      <div class="kv"><span class="k">Verbindung</span><span class="v" id="ol_reach">–</span></div>
+      <div class="kv"><span class="k">Modell</span><span class="v" id="ol_model">–</span></div>
+      <div class="kv"><span class="k">Modell vorhanden</span><span class="v" id="ol_present">–</span></div>
+      <div class="btns" style="margin-top:12px"><button id="olBtn" class="ghost">Prüfen</button></div>
+      <div class="status" id="olStatus"></div>
+    </div>
+    <div class="card">
+      <h2>Letzte Protokollzeilen</h2>
+      <div class="logbox" id="logbox">–</div>
+    </div>
   </div>
 </div>
 
 <script>
 const el = id => document.getElementById(id);
-
-function row(k, v) {
-  return `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+const fmt = (v,u="") => (v===null||v===undefined||v==="") ? "–" : v+u;
+function agoText(ts, now){ if(!ts) return "noch nie"; const s=Math.max(0,Math.round(now-ts));
+  if(s<60) return "vor "+s+" s"; if(s<3600) return "vor "+Math.round(s/60)+" min";
+  if(s<86400) return "vor "+Math.round(s/3600)+" h"; return "vor "+Math.round(s/86400)+" Tagen"; }
+const phaseLabels = { idle:"bereit", fetch:"Bild holen", rotate:"Zuschneiden", ocr:"OCR läuft", plausibility:"Plausibilität", done:"fertig", error:"Fehler" };
+let lastFilled = null;
+function kv(k,v){ return '<div class="kv"><span class="k">'+k+'</span><span class="v">'+v+'</span></div>'; }
+function applyStatus(s){
+  el("cur_value").textContent = fmt(s.stored_value," m³");
+  el("cur_errcount").textContent = fmt(s.error_count);
+  el("cur_last").textContent = agoText(s.stored_timestamp, s.now);
+  const dot = el("phase_dot");
+  dot.className = "dot" + (s.running ? " run" : (s.phase==="error" ? " err" : (s.phase==="done" ? " ok" : "")));
+  el("phase_text").textContent = (s.running?"läuft: ":"") + (phaseLabels[s.phase]||s.phase) + (s.running?" – "+s.phase_text:"");
+  el("phase_elapsed").textContent = (s.elapsed_s!==null && s.elapsed_s!==undefined) ? ("("+s.elapsed_s+" s)") : "";
+  const d = s.last_result;
+  if(d){
+    el("cur_flow").textContent = fmt(d.flow_rate_l_min," L/min");
+    el("resultKvs").innerHTML =
+      kv("Zählerstand", fmt(d.value," m³")) + kv("Rohwert", fmt(d.raw_digits)) +
+      kv("Durchfluss", fmt(d.flow_rate_l_min," L/min")) + kv("Status", fmt(d.status)) +
+      kv("Plausibel", d.plausible===undefined?"–":(d.plausible?"ja":"nein")) +
+      (d.held ? kv("Hinweis","letzter Wert gehalten") : "") +
+      (d.last_value!==undefined?kv("Vergleichswert", fmt(d.last_value," m³")):"");
+    const eb = el("errbox");
+    if(d.raw_digits === null || (d.status && d.status !== "ok")){ eb.className="errbox show";
+      eb.textContent = "Fehlerdetails:\n" + (d.error || d.status || "unbekannt"); }
+    else { eb.className="errbox"; }
+  }
+  if(lastFilled===null && s.stored_value!==null && s.stored_value!==undefined){ el("setInput").value=s.stored_value; lastFilled=s.stored_value; }
 }
-
-el("runBtn").addEventListener("click", () => {
-  const b = el("runBtn");
-  b.disabled = true;
-  b.innerHTML = '<span class="spin"></span>Werte…';
-  el("result").classList.add("show");
-  el("kvs").innerHTML = "";
-  el("status").className = "status";
-  el("status").textContent = "Bild holen und auswerten – das kann je nach Modell etwas dauern…";
-
-  fetch("process").then(async r => {
-    const d = await r.json();
-    b.disabled = false; b.textContent = "Jetzt auswerten";
-    const fmt = (v, u="") => (v===null||v===undefined) ? "–" : v + u;
-    el("kvs").innerHTML =
-      row("Zählerstand", fmt(d.value, " m³")) +
-      row("Rohwert", fmt(d.raw_digits)) +
-      row("Durchfluss", fmt(d.flow_rate_l_min, " L/min")) +
-      row("Status", fmt(d.status)) +
-      row("Fehlerzähler", fmt(d.error_count)) +
-      (d.held ? row("Hinweis", "letzter Wert gehalten") : "");
-    // Bild neu laden (Cache umgehen)
-    el("rotimg").src = "tuner/dst.jpg?ts=" + Date.now();
-    if (d.raw_digits !== null) {
-      el("status").className = "status ok";
-      el("status").textContent = "Auswertung erfolgreich.";
-    } else {
-      el("status").className = "status err";
-      el("status").textContent = "Keine gültige Ablesung: " + (d.status || d.error || "unbekannt");
-    }
-  }).catch(e => {
-    b.disabled = false; b.textContent = "Jetzt auswerten";
-    el("status").className = "status err";
-    el("status").textContent = "Fehler: " + e;
-  });
-});
+function poll(){
+  fetch("status").then(r=>r.json()).then(applyStatus).catch(()=>{});
+  fetch("logs").then(r=>r.json()).then(j=>{ el("logbox").textContent=(j.lines||[]).join("\n")||"–"; el("logbox").scrollTop=el("logbox").scrollHeight; }).catch(()=>{});
+}
+function refreshImages(){ const t=Date.now(); el("dstImg").src="tuner/dst.jpg?ts="+t; el("srcImg").src="tuner/source.jpg?ts="+t; }
+el("runBtn").addEventListener("click", ()=>{ const b=el("runBtn"); b.disabled=true; b.innerHTML='<span class="spin"></span> läuft…';
+  el("errbox").className="errbox";
+  fetch("process").then(r=>r.json()).then(()=>{ b.disabled=false; b.textContent="Jetzt auswerten"; refreshImages(); poll(); })
+  .catch(e=>{ b.disabled=false; b.textContent="Jetzt auswerten"; el("errbox").className="errbox show"; el("errbox").textContent="Fehler: "+e; }); });
+el("setBtn").addEventListener("click", ()=>{ const v=parseFloat(el("setInput").value); const st=el("setStatus");
+  if(isNaN(v)){ st.className="status err"; st.textContent="Bitte eine Zahl eingeben."; return; }
+  st.className="status"; st.textContent="Speichere…";
+  fetch("set_value",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({value:v})}).then(r=>r.json()).then(d=>{
+    if(d.ok){ st.className="status ok"; st.textContent="Gespeichert: "+d.value+" m³"; poll(); } else { st.className="status err"; st.textContent="Fehler: "+(d.error||""); }
+  }).catch(e=>{ st.className="status err"; st.textContent="Fehler: "+e; }); });
+el("fillLastBtn").addEventListener("click", ()=>{ fetch("status").then(r=>r.json()).then(s=>{ if(s.stored_value!==null&&s.stored_value!==undefined) el("setInput").value=s.stored_value; }); });
+el("refreshImgBtn").addEventListener("click", refreshImages);
+function checkOllama(){ const st=el("olStatus"); st.className="status"; st.textContent="Prüfe…";
+  fetch("ollama_status").then(r=>r.json()).then(d=>{
+    el("ol_reach").innerHTML = d.reachable ? '<span class="pill ok">erreichbar</span>' : '<span class="pill err">nicht erreichbar</span>';
+    el("ol_model").textContent = d.model || "–";
+    el("ol_present").innerHTML = d.model_present ? '<span class="pill ok">ja</span>' : '<span class="pill err">nein</span>';
+    st.className = d.reachable ? "status ok" : "status err";
+    st.textContent = d.reachable ? (d.model_present ? "Alles bereit." : "Verbunden, aber Modell nicht gefunden.") : ("Nicht erreichbar: "+(d.error||""));
+  }).catch(e=>{ st.className="status err"; st.textContent="Fehler: "+e; }); }
+el("olBtn").addEventListener("click", checkOllama);
+refreshImages(); checkOllama(); poll(); setInterval(poll, 2000);
 </script>
 </body>
 </html>

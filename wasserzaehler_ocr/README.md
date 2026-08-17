@@ -252,3 +252,22 @@ Technisch lauscht das Add-on auf zwei Ports: 8099 für Ingress (der Button,
 abgesichert über die HA-Anmeldung) und 5000 für die HTTP-API (die von der
 Integration bzw. dem REST-Sensor genutzt wird). Beide bieten dieselben
 Funktionen.
+
+## Übersichtsseite (Kommandozentrale)
+
+Die Startseite (Button „Benutzeroberfläche öffnen") zeigt jetzt:
+
+- **Aktueller Stand** – Zählerstand, Durchfluss, Zeitpunkt der letzten
+  erfolgreichen Ablesung, Fehlerzähler und der Live-Prozessstatus
+  (Bild holen → Zuschneiden → OCR läuft → fertig), der sich während einer
+  Auswertung automatisch aktualisiert.
+- **Letztes Ergebnis** – alle Details inklusive ausführlicher Fehlerbeschreibung.
+- **Zählerstand überschreiben** – Eingabefeld, vorbefüllt mit dem letzten
+  ermittelten Wert; anpassen und speichern.
+- **Bilder der letzten Analyse** – das zugeschnittene (an die OCR gesendete)
+  Bild und das Rohbild der Kamera.
+- **Ollama-Status** – zeigt, ob der Server erreichbar und das Modell geladen ist.
+- **Letzte Protokollzeilen** – die jüngsten Log-Einträge direkt auf der Seite.
+
+Die Seite pollt den Status alle 2 Sekunden, sodass ein laufender
+Ablesevorgang live mitverfolgt werden kann.
