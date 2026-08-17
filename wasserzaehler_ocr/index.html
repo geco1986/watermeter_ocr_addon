@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<base href="./">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wasserzähler OCR</title>
+<style>
+  :root { --bg:#0f1419; --card:#1a2129; --fg:#e6edf3; --muted:#8b98a5;
+          --accent:#1a6fc4; --accent2:#2f81f7; --ok:#2ea043; --warn:#e23b3b; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:720px; margin:0 auto; padding:24px; }
+  header { display:flex; align-items:center; gap:14px; margin-bottom:8px; }
+  .drop { width:44px; height:44px; flex:none; }
+  h1 { margin:0; font-size:20px; }
+  .sub { color:var(--muted); font-size:14px; margin:2px 0 24px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:560px){ .grid{ grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid #2a3441; border-radius:12px;
+          padding:20px; display:flex; flex-direction:column; gap:10px; }
+  .card h2 { margin:0; font-size:16px; }
+  .card p { margin:0; color:var(--muted); font-size:13px; flex:1; }
+  button, a.btn { display:inline-block; text-align:center; text-decoration:none;
+          background:var(--accent); color:#fff; border:0; border-radius:8px;
+          padding:12px 16px; font-size:14px; cursor:pointer; }
+  button:hover, a.btn:hover { background:var(--accent2); }
+  a.btn.ghost { background:transparent; border:1px solid #2a3441; color:var(--fg); }
+  .result { margin-top:20px; background:var(--card); border:1px solid #2a3441;
+            border-radius:12px; padding:18px; display:none; }
+  .result.show { display:block; }
+  .kv { display:flex; justify-content:space-between; padding:6px 0;
+        border-bottom:1px solid #222c36; font-size:14px; }
+  .kv:last-child { border-bottom:0; }
+  .kv .k { color:var(--muted); }
+  .kv .v { font-variant-numeric:tabular-nums; }
+  .status { margin-top:10px; font-size:13px; min-height:18px; }
+  .status.ok { color:var(--ok); } .status.err { color:var(--warn); }
+  .imgs { display:flex; gap:12px; flex-wrap:wrap; margin-top:14px; }
+  .imgs figure { margin:0; flex:1; min-width:160px; }
+  .imgs img { width:100%; border:1px solid #2a3441; border-radius:8px; background:#000; }
+  .imgs figcaption { color:var(--muted); font-size:12px; margin-top:4px; text-align:center; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid #3a4551;
+          border-top-color:var(--accent2); border-radius:50%; animation:s .8s linear infinite;
+          vertical-align:middle; margin-right:6px; }
+  @keyframes s { to { transform:rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg class="drop" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+      <path d="M128 40 L70 120 a62 62 0 1 0 116 0 Z" fill="#1a6fc4"/>
+      <rect x="86" y="132" width="26" height="34" fill="#fff"/>
+      <rect x="116" y="132" width="26" height="34" fill="#fff"/>
+      <rect x="146" y="132" width="26" height="34" fill="#e23b3b"/>
+    </svg>
+    <div>
+      <h1>Wasserzähler OCR</h1>
+      <div class="sub">Ablesung starten oder das Kamerabild optimieren.</div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Auswertung starten</h2>
+      <p>Holt ein frisches Bild, liest den Zählerstand aus und zeigt das
+         Ergebnis mit Durchfluss und Status.</p>
+      <button id="runBtn">Jetzt auswerten</button>
+    </div>
+    <div class="card">
+      <h2>Bild optimieren</h2>
+      <p>Rotation und Zuschnitt live einstellen und als Standard speichern.</p>
+      <a class="btn ghost" href="tuner">Tuner öffnen</a>
+    </div>
+  </div>
+
+  <div class="result" id="result">
+    <div id="kvs"></div>
+    <div class="imgs">
+      <figure>
+        <img id="rotimg" alt="Zugeschnittenes Bild">
+        <figcaption>an die OCR gesendetes Bild</figcaption>
+      </figure>
+    </div>
+    <div class="status" id="status"></div>
+  </div>
+</div>
+
+<script>
+const el = id => document.getElementById(id);
+
+function row(k, v) {
+  return `<div class="kv"><span class="k">${k}</span><span class="v">${v}</span></div>`;
+}
+
+el("runBtn").addEventListener("click", () => {
+  const b = el("runBtn");
+  b.disabled = true;
+  b.innerHTML = '<span class="spin"></span>Werte…';
+  el("result").classList.add("show");
+  el("kvs").innerHTML = "";
+  el("status").className = "status";
+  el("status").textContent = "Bild holen und auswerten – das kann je nach Modell etwas dauern…";
+
+  fetch("process").then(async r => {
+    const d = await r.json();
+    b.disabled = false; b.textContent = "Jetzt auswerten";
+    const fmt = (v, u="") => (v===null||v===undefined) ? "–" : v + u;
+    el("kvs").innerHTML =
+      row("Zählerstand", fmt(d.value, " m³")) +
+      row("Rohwert", fmt(d.raw_digits)) +
+      row("Durchfluss", fmt(d.flow_rate_l_min, " L/min")) +
+      row("Status", fmt(d.status)) +
+      row("Fehlerzähler", fmt(d.error_count)) +
+      (d.held ? row("Hinweis", "letzter Wert gehalten") : "");
+    // Bild neu laden (Cache umgehen)
+    el("rotimg").src = "tuner/dst.jpg?ts=" + Date.now();
+    if (d.raw_digits !== null) {
+      el("status").className = "status ok";
+      el("status").textContent = "Auswertung erfolgreich.";
+    } else {
+      el("status").className = "status err";
+      el("status").textContent = "Keine gültige Ablesung: " + (d.status || d.error || "unbekannt");
+    }
+  }).catch(e => {
+    b.disabled = false; b.textContent = "Jetzt auswerten";
+    el("status").className = "status err";
+    el("status").textContent = "Fehler: " + e;
+  });
+});
+</script>
+</body>
+</html>

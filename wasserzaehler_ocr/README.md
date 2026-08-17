@@ -237,3 +237,18 @@ Die getunten Werte liegen in `tuning_path` (Standard
 Zuschnittwerten in der Add-on-Konfiguration, solange die Datei existiert.
 Willst du sie dauerhaft als Standard, kannst du sie zusätzlich in die
 Add-on-Konfiguration eintragen.
+
+## Benutzeroberfläche (Button „Benutzeroberfläche öffnen")
+
+Das Add-on hat eine eingebaute Weboberfläche über Ingress. Nach dem Start
+erscheint im Add-on-Info-Bildschirm der Button **„Benutzeroberfläche öffnen"**
+(und ein Eintrag „Wasserzähler" in der HA-Seitenleiste). Die Startseite bietet:
+
+- **Auswertung starten** – löst eine komplette Ablesung aus und zeigt
+  Zählerstand, Durchfluss, Status und das zugeschnittene Bild direkt an.
+- **Bild optimieren** – öffnet den Tuner (Rotation & Zuschnitt live einstellen).
+
+Technisch lauscht das Add-on auf zwei Ports: 8099 für Ingress (der Button,
+abgesichert über die HA-Anmeldung) und 5000 für die HTTP-API (die von der
+Integration bzw. dem REST-Sensor genutzt wird). Beide bieten dieselben
+Funktionen.

@@ -290,6 +290,22 @@ def set_value():
     return jsonify({"ok": True, "value": value})
 
 
+@app.route("/", methods=["GET"])
+def index():
+    """Startseite (Landing-Page) mit den beiden Aktionen."""
+    here = Path(__file__).parent / "index.html"
+    return here.read_text(encoding="utf-8"), 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
+@app.route("/tuner/dst.jpg", methods=["GET"])
+def tuner_dst():
+    """Liefert das zuletzt zugeschnittene Ergebnisbild (fuer die Landing-Page)."""
+    dst = Path(OPTS["dst_path"])
+    if not dst.exists():
+        return "kein Ergebnisbild vorhanden", 404
+    return send_file(str(dst), mimetype="image/jpeg")
+
+
 @app.route("/tuner", methods=["GET"])
 def tuner_page():
     """Liefert die Tuner-Webseite."""
@@ -391,4 +407,18 @@ if __name__ == "__main__":
     log(f"Add-on gestartet, Python {sys.version.split()[0]}")
     safe_opts = {k: v for k, v in OPTS.items()}
     log(f"Optionen: {safe_opts}")
-    app.run(host="0.0.0.0", port=5000)
+
+    # Die App lauscht auf zwei Ports:
+    #  - 5000: HTTP-API (wird von der Integration / REST-Sensor genutzt)
+    #  - 8099: Ingress (der "Benutzeroberfläche öffnen"-Button in HA)
+    # Port 8099 laeuft in einem Thread, 5000 im Hauptthread.
+    from threading import Thread
+    from werkzeug.serving import make_server
+
+    ingress_srv = make_server("0.0.0.0", 8099, app, threaded=True)
+    Thread(target=ingress_srv.serve_forever, daemon=True).start()
+    log("Ingress-Server auf Port 8099 gestartet")
+
+    api_srv = make_server("0.0.0.0", 5000, app, threaded=True)
+    log("API-Server auf Port 5000 gestartet")
+    api_srv.serve_forever()
