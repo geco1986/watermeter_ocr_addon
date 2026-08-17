@@ -81,8 +81,8 @@ entsprechen deinen bisherigen Einstellungen.
 | camera_entity | camera.watermeter | HA-Kamera, von der das Bild geholt wird |
 | light_entity | (leer) | Lampe (light./switch.), die vor dem Foto an- und danach ausgeht |
 | light_warmup | 10 | Wartezeit nach Licht-an bis zum Foto (Sek.) |
-| src_path | /config/watermeter/watermeter_image.jpg | abgelegtes Rohbild |
-| dst_path | /config/watermeter/watermeter_rotated.jpg | zugeschnittenes Bild |
+| src_path | /data/watermeter_image.jpg | abgelegtes Rohbild |
+| dst_path | /data/watermeter_rotated.jpg | zugeschnittenes Bild |
 | save_source | true | Rohbild behalten (zum Kalibrieren) |
 | rotate_angle | 53 | Drehwinkel (gegen Uhrzeigersinn) |
 | fill_color | black | Eckenfüllung |
@@ -99,7 +99,7 @@ entsprechen deinen bisherigen Einstellungen.
 | max_increase | 5.0 | max. erlaubter Zuwachs pro Ablesung (m³) |
 | allow_equal | true | gleicher Wert wie zuvor erlaubt |
 | reject_implausible | true | unplausible Werte verwerfen statt nur markieren |
-| last_value_path | /config/watermeter/last_value.json | Speicher des letzten guten Werts |
+| last_value_path | /data/last_value.json | Speicher des letzten guten Werts |
 | log_max_bytes | 50000 | Log-Rotationsgröße |
 
 ## Aufruf aus Home Assistant
@@ -233,7 +233,7 @@ Statt die crop-Werte zu erraten, kannst du sie live einstellen:
 5. „Auf Add-on-Konfig zurücksetzen" verwirft die getunten Werte wieder.
 
 Die getunten Werte liegen in `tuning_path` (Standard
-`/config/watermeter/tuning.json`) und haben Vorrang vor den Rotations-/
+`/data/tuning.json`) und haben Vorrang vor den Rotations-/
 Zuschnittwerten in der Add-on-Konfiguration, solange die Datei existiert.
 Willst du sie dauerhaft als Standard, kannst du sie zusätzlich in die
 Add-on-Konfiguration eintragen.
@@ -294,3 +294,15 @@ der Übersichtsseite unter „KI-Anbieter" angezeigt.
 **Hinweis zu Cloud-Anbietern:** Es entstehen Kosten pro Anfrage, und das
 Zählerbild wird an den jeweiligen Dienst übertragen. Der API-Schlüssel wird in
 den Add-on-Optionen gespeichert.
+
+## Speicherort der Bilder (ab 4.12.0)
+
+Die Bilder und Zustandsdateien liegen jetzt im privaten Add-on-Speicher
+`/data` (statt im `/config`-Ordner). Das ist sauberer und der `/config`-Ordner
+bleibt unberührt. `/data` ist persistent – die Dateien überstehen Neustarts
+und Updates.
+
+**Folge davon:** Die Bilder sind nicht mehr direkt über File-Editor/Samba
+oder eine `local_file`-Kamera erreichbar. Zum Ansehen nutzt du die
+Add-on-Weboberfläche (zeigt beide Bilder), die die Bilder über die Routen
+`/tuner/dst.jpg` (zugeschnitten) und `/tuner/source.jpg` (Rohbild) bereitstellt.

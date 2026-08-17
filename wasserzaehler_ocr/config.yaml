@@ -1,5 +1,5 @@
 name: "Wasserzähler Rotate & OCR"
-version: "4.11.1"
+version: "4.12.0"
 slug: "wasserzaehler_ocr"
 description: "Holt das Bild von der HA-Kamera, rotiert und schneidet es zu und liest den Wasserzähler per ausgelagertem Ollama-Vision-Modell aus – vollständig konfigurierbar"
 arch:
@@ -17,16 +17,12 @@ ports:
   5000/tcp: 5000
 ports_description:
   5000/tcp: "HTTP-API (GET /process, GET /health, /tuner)"
-map:
-  - type: homeassistant_config
-    read_only: false
-    path: /config
 options:
   camera_entity: "camera.esp32_cam_esp32_kamera"
   light_entity: "light.esp32_cam_kamera_blitzlicht"
   light_warmup: 10
-  dst_path: "/config/watermeter/watermeter_rotated.jpg"
-  src_path: "/config/watermeter/watermeter_image.jpg"
+  dst_path: "/data/watermeter_rotated.jpg"
+  src_path: "/data/watermeter_image.jpg"
   save_source: true
   rotate_angle: 53
   fill_color: "black"
@@ -55,8 +51,8 @@ options:
   allow_equal: true
   reject_implausible: true
   hold_last_on_failure: true
-  last_value_path: "/config/watermeter/last_value.json"
-  tuning_path: "/config/watermeter/tuning.json"
+  last_value_path: "/data/last_value.json"
+  tuning_path: "/data/tuning.json"
 schema:
   camera_entity: str
   light_entity: "str?"

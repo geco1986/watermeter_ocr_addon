@@ -34,8 +34,8 @@ DEFAULTS = {
     "camera_entity": "camera.esp32_cam_esp32_kamera",
     "light_entity": "light.esp32_cam_kamera_blitzlicht",
     "light_warmup": 10,
-    "src_path": "/config/watermeter/watermeter_image.jpg",
-    "dst_path": "/config/watermeter/watermeter_rotated.jpg",
+    "src_path": "/data/watermeter_image.jpg",
+    "dst_path": "/data/watermeter_rotated.jpg",
     "save_source": True,
     "rotate_angle": 53,
     "fill_color": "black",
@@ -64,8 +64,8 @@ DEFAULTS = {
     "allow_equal": True,
     "reject_implausible": True,
     "hold_last_on_failure": True,
-    "last_value_path": "/config/watermeter/last_value.json",
-    "tuning_path": "/config/watermeter/tuning.json",
+    "last_value_path": "/data/last_value.json",
+    "tuning_path": "/data/tuning.json",
 }
 
 

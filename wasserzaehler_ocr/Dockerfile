@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-LABEL io.hass.version="4.11.1" \
+LABEL io.hass.version="4.12.0" \
       io.hass.type="app" \
       io.hass.arch="amd64|aarch64"
 
@@ -9,7 +9,7 @@ LABEL io.hass.version="4.11.1" \
 # ocr_provider=ollama_local gewaehlt ist. So bleibt der Build robust und das
 # Image klein, wenn du Cloud oder externes Ollama nutzt.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl ca-certificates tar && \
+    apt-get install -y --no-install-recommends curl ca-certificates tar zstd && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

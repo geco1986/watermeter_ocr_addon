@@ -11,7 +11,9 @@ PROVIDER=$(python3 -c "import json;print(json.load(open('$OPTIONS')).get('ocr_pr
 
 if [ "$PROVIDER" = "ollama_local" ]; then
   echo "[run] ocr_provider=ollama_local"
-  OLLAMA_BIN=/data/ollama/bin/ollama
+
+  # Binary evtl. schon vorhanden? (persistente Installation in /data)
+  OLLAMA_BIN="$(find /data/ollama -type f -name ollama 2>/dev/null | head -1)"
 
   # Ollama-Binary bei Bedarf herunterladen (persistent in /data)
   if [ ! -x "$OLLAMA_BIN" ]; then
@@ -23,13 +25,36 @@ if [ "$PROVIDER" = "ollama_local" ]; then
       *) echo "[run] FEHLER: nicht unterstuetzte Architektur $ARCH"; exit 1 ;;
     esac
     mkdir -p /data/ollama
-    if curl -fsSL "https://ollama.com/download/ollama-linux-${OLLAMA_ARCH}.tgz" -o /tmp/ollama.tgz; then
-      tar -C /data/ollama -xzf /tmp/ollama.tgz
-      rm -f /tmp/ollama.tgz
+    BASE="https://ollama.com/download/ollama-linux-${OLLAMA_ARCH}"
+    OK=0
+
+    # Bevorzugt das aktuelle .tar.zst-Format (-L folgt Redirects, -f meldet 404)
+    echo "[run] versuche ${BASE}.tar.zst ..."
+    if curl -fSL "${BASE}.tar.zst" -o /tmp/ollama.tar.zst; then
+      if tar --use-compress-program=unzstd -C /data/ollama -xf /tmp/ollama.tar.zst; then
+        OK=1
+      fi
+      rm -f /tmp/ollama.tar.zst
+    fi
+
+    # Fallback: aelteres .tgz-Format
+    if [ "$OK" != "1" ]; then
+      echo "[run] versuche ${BASE}.tgz ..."
+      if curl -fSL "${BASE}.tgz" -o /tmp/ollama.tgz; then
+        if tar -C /data/ollama -xzf /tmp/ollama.tgz; then
+          OK=1
+        fi
+        rm -f /tmp/ollama.tgz
+      fi
+    fi
+
+    if [ "$OK" = "1" ]; then
       echo "[run] Ollama installiert nach /data/ollama"
+      OLLAMA_BIN="$(find /data/ollama -type f -name ollama 2>/dev/null | head -1)"
+      [ -n "$OLLAMA_BIN" ] && chmod +x "$OLLAMA_BIN"
     else
-      echo "[run] FEHLER: Ollama-Download fehlgeschlagen. Pruefe die Internetverbindung."
-      echo "[run] Starte App trotzdem - Auswertung schlaegt bis dahin fehl."
+      echo "[run] FEHLER: Ollama-Download fehlgeschlagen (beide Formate)."
+      echo "[run] Starte App trotzdem - Auswertung mit ollama_local schlaegt fehl."
     fi
   fi
 
