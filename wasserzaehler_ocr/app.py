@@ -12,10 +12,10 @@ Endpunkte:
 """
 
 import json
+import logging
 import sys
 import time
 import traceback
-from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, jsonify, request
@@ -55,7 +55,6 @@ DEFAULTS = {
     "reject_implausible": True,
     "hold_last_on_failure": True,
     "last_value_path": "/config/watermeter/last_value.json",
-    "log_max_bytes": 50000,
 }
 
 
@@ -72,20 +71,20 @@ def load_options():
 
 
 OPTS = load_options()
-LOG_PATH = Path(OPTS["dst_path"]).parent / "wasserzaehler_ocr.log"
+
+# Logging direkt nach stdout - Home Assistant zeigt das im Add-on-Protokoll an.
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    stream=sys.stdout,
+)
+_LOGGER = logging.getLogger("wasserzaehler")
 
 
 def log(msg: str) -> None:
-    try:
-        max_bytes = OPTS.get("log_max_bytes", 50000)
-        if LOG_PATH.exists() and LOG_PATH.stat().st_size > max_bytes:
-            LOG_PATH.unlink()
-        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        with LOG_PATH.open("a", encoding="utf-8") as fh:
-            fh.write(f"{stamp}  {msg}\n")
-    except OSError:
-        print(msg, file=sys.stderr)
+    """Schreibt eine Zeile ins Add-on-Protokoll (stdout)."""
+    _LOGGER.info(msg)
 
 
 app = Flask(__name__)
