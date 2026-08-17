@@ -12,18 +12,20 @@ Endpunkte:
 """
 
 import json
+import io
 import logging
 import sys
 import time
 import traceback
 from pathlib import Path
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_file
 
 import fetch_image
 import rotate
 import ollama_ocr
 import plausibility
+import tuning
 
 OPTIONS_PATH = Path("/data/options.json")
 
@@ -55,6 +57,7 @@ DEFAULTS = {
     "reject_implausible": True,
     "hold_last_on_failure": True,
     "last_value_path": "/config/watermeter/last_value.json",
+    "tuning_path": "/config/watermeter/tuning.json",
 }
 
 
@@ -126,17 +129,19 @@ def process():
                                       timeout=15, log=log)
 
         # 2. Rotation + Zuschnitt (Rohbild -> dst_path)
+        # Effektive Werte: Add-on-Optionen, ueberschrieben von Tuner-Werten
+        eff = tuning.effective(OPTS, Path(OPTS["tuning_path"]), log)
         rotate.rotate_and_crop(
             src_path=raw_target,
             dst_path=Path(OPTS["dst_path"]),
-            angle=float(OPTS["rotate_angle"]),
-            fill_color=OPTS["fill_color"],
-            crop_top=int(OPTS["crop_top"]),
-            crop_bottom=int(OPTS["crop_bottom"]),
-            crop_left=int(OPTS["crop_left"]),
-            crop_right=int(OPTS["crop_right"]),
-            quality=int(OPTS["jpeg_quality"]),
-            subsampling=int(OPTS["jpeg_subsampling"]),
+            angle=float(eff["rotate_angle"]),
+            fill_color=eff["fill_color"],
+            crop_top=int(eff["crop_top"]),
+            crop_bottom=int(eff["crop_bottom"]),
+            crop_left=int(eff["crop_left"]),
+            crop_right=int(eff["crop_right"]),
+            quality=int(eff["jpeg_quality"]),
+            subsampling=int(eff["jpeg_subsampling"]),
             log=log,
         )
 
@@ -283,6 +288,103 @@ def set_value():
     log(f"Wert manuell gesetzt: {value} (Zeitstempel neu, Fehlerzaehler 0)")
 
     return jsonify({"ok": True, "value": value})
+
+
+@app.route("/tuner", methods=["GET"])
+def tuner_page():
+    """Liefert die Tuner-Webseite."""
+    here = Path(__file__).parent / "tuner.html"
+    return here.read_text(encoding="utf-8"), 200, {"Content-Type": "text/html; charset=utf-8"}
+
+
+@app.route("/tuner/current", methods=["GET"])
+def tuner_current():
+    """Aktuelle effektive Rotations-/Zuschnittwerte (fuer das Formular)."""
+    eff = tuning.effective(OPTS, Path(OPTS["tuning_path"]), log)
+    # Sicherstellen, dass alle erwarteten Schluessel da sind
+    for k in tuning.TUNABLE_KEYS:
+        eff.setdefault(k, OPTS.get(k))
+    return jsonify(eff)
+
+
+@app.route("/tuner/fetch_source", methods=["POST"])
+def tuner_fetch_source():
+    """Holt ein frisches Kamerabild (mit Lampe) fuer den Tuner."""
+    raw_target = Path(OPTS["src_path"])
+    light_entity = OPTS.get("light_entity", "")
+    warmup = int(OPTS.get("light_warmup", 10))
+    try:
+        try:
+            if light_entity:
+                fetch_image.set_light(light_entity, True, timeout=15, log=log)
+                if warmup > 0:
+                    time.sleep(warmup)
+            fetch_image.fetch_camera_image(
+                camera_entity=OPTS["camera_entity"],
+                dst_path=raw_target,
+                timeout=int(OPTS["ollama_timeout"]),
+                log=log,
+            )
+        finally:
+            if light_entity:
+                fetch_image.set_light(light_entity, False, timeout=15, log=log)
+        return jsonify({"ok": True})
+    except Exception as exc:  # noqa: BLE001
+        log(f"Tuner-Bildabruf fehlgeschlagen: {exc}")
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.route("/tuner/source.jpg", methods=["GET"])
+def tuner_source():
+    """Liefert das aktuelle Quellbild."""
+    src = Path(OPTS["src_path"])
+    if not src.exists():
+        return "kein Quellbild vorhanden", 404
+    return send_file(str(src), mimetype="image/jpeg")
+
+
+@app.route("/tuner/preview.jpg", methods=["GET"])
+def tuner_preview():
+    """Rendert eine Vorschau mit den uebergebenen Werten."""
+    src = Path(OPTS["src_path"])
+    try:
+        img = rotate.render(
+            src_path=src,
+            angle=float(request.args.get("rotate_angle", OPTS["rotate_angle"])),
+            fill_color=request.args.get("fill_color", OPTS["fill_color"]),
+            crop_top=int(request.args.get("crop_top", OPTS["crop_top"])),
+            crop_bottom=int(request.args.get("crop_bottom", OPTS["crop_bottom"])),
+            crop_left=int(request.args.get("crop_left", OPTS["crop_left"])),
+            crop_right=int(request.args.get("crop_right", OPTS["crop_right"])),
+            log=None,
+        )
+        quality = int(request.args.get("jpeg_quality", OPTS["jpeg_quality"]))
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=quality)
+        buf.seek(0)
+        return send_file(buf, mimetype="image/jpeg")
+    except FileNotFoundError:
+        return "kein Quellbild", 404
+    except ValueError as exc:
+        return str(exc), 422
+
+
+@app.route("/tuner/save", methods=["POST"])
+def tuner_save():
+    """Speichert die getunten Werte (ueberschreiben die Add-on-Konfig)."""
+    data = request.get_json(silent=True) or {}
+    try:
+        tuning.save(Path(OPTS["tuning_path"]), data, log)
+        return jsonify({"ok": True})
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.route("/tuner/reset", methods=["POST"])
+def tuner_reset():
+    """Loescht die getunten Werte (zurueck zur Add-on-Konfig)."""
+    tuning.clear(Path(OPTS["tuning_path"]), log)
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

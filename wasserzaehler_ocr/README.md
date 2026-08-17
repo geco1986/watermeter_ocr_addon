@@ -199,7 +199,7 @@ an, bevor du das erste Mal ausliest.
 ## Fehlersuche
 
 - Add-on-Log: Einstellungen → Apps → Wasserzähler Rotate & OCR → Protokoll.
-- Ausführliches Verarbeitungslog: `/config/watermeter/wasserzaehler_ocr.log`.
+- Ausfuehrliches Verarbeitungslog: direkt im Add-on unter "Protokoll" (Log-Tab), nicht mehr als Datei.
 - Health-Check: `curl http://<HA-HOST-IP>:5000/health` → `{"status": "ok"}`.
 - Ollama erreichbar? Vom HA-Host aus: `curl http://<PI-IP>:11434/api/tags`.
 - Falsche Ziffernzahl? Zuerst `watermeter_rotated.jpg` anschauen und crop-Werte
@@ -217,3 +217,23 @@ wird, kannst du den gespeicherten Wert überschreiben:
 
 Dabei wird der Zeitstempel auf jetzt gesetzt (die Durchflussberechnung startet
 frisch) und der Fehlerzähler zurückgesetzt.
+
+## Rotation & Zuschnitt einstellen (Tuner-Webseite)
+
+Statt die crop-Werte zu erraten, kannst du sie live einstellen:
+
+1. Im Browser `http://<HA-HOST-IP>:5000/tuner` öffnen.
+2. „Neues Bild von Kamera holen" (holt ein frisches Bild mit Lampe, wie im
+   echten Ablauf) – oder das zuletzt gespeicherte Quellbild wird genutzt.
+3. Drehwinkel und Zuschnitt (oben/unten/links/rechts) sowie JPEG-Qualität per
+   Schieberegler anpassen. Die Vorschau rechts aktualisiert sich sofort und
+   zeigt genau das Bild, das an die OCR geht.
+4. Wenn nur noch die Ziffernreihe im Vorschaubild ist: „Werte speichern
+   (überschreiben)". Ab dann gelten diese Werte für alle Ablesungen.
+5. „Auf Add-on-Konfig zurücksetzen" verwirft die getunten Werte wieder.
+
+Die getunten Werte liegen in `tuning_path` (Standard
+`/config/watermeter/tuning.json`) und haben Vorrang vor den Rotations-/
+Zuschnittwerten in der Add-on-Konfiguration, solange die Datei existiert.
+Willst du sie dauerhaft als Standard, kannst du sie zusätzlich in die
+Add-on-Konfiguration eintragen.

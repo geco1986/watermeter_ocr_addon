@@ -77,6 +77,6 @@ configuration:
   last_value_path:
     name: Speicherpfad letzter Wert
     description: Datei, in der der letzte gültige Wert für den Vergleich abgelegt wird.
-  log_max_bytes:
-    name: Max. Logdateigröße
-    description: Ab dieser Größe (Bytes) wird die Logdatei neu begonnen.
+  tuning_path:
+    name: Speicherpfad Tuning-Werte
+    description: Datei, in der die über die Tuner-Webseite gespeicherten Rotations-/Zuschnittwerte liegen. Diese überschreiben die obigen Werte, solange die Datei existiert.

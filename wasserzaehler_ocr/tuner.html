@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wasserzähler – Rotation & Zuschnitt</title>
+<style>
+  :root { --bg:#0f1419; --card:#1a2129; --fg:#e6edf3; --muted:#8b98a5;
+          --accent:#1a6fc4; --accent2:#2f81f7; --ok:#2ea043; --warn:#e23b3b; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  header { padding:16px 20px; background:var(--card); border-bottom:1px solid #2a3441; }
+  h1 { margin:0; font-size:18px; }
+  .sub { color:var(--muted); font-size:13px; margin-top:4px; }
+  .wrap { display:flex; flex-wrap:wrap; gap:20px; padding:20px; }
+  .col { flex:1; min-width:300px; }
+  .card { background:var(--card); border:1px solid #2a3441; border-radius:10px;
+          padding:16px; margin-bottom:16px; }
+  .card h2 { margin:0 0 12px; font-size:14px; color:var(--muted);
+             text-transform:uppercase; letter-spacing:.05em; }
+  label { display:block; font-size:13px; margin:10px 0 4px; }
+  .row { display:flex; align-items:center; gap:10px; }
+  input[type=range] { flex:1; }
+  input[type=number] { width:90px; background:#0d1117; color:var(--fg);
+        border:1px solid #2a3441; border-radius:6px; padding:6px 8px; font-size:14px; }
+  select { background:#0d1117; color:var(--fg); border:1px solid #2a3441;
+        border-radius:6px; padding:6px 8px; font-size:14px; }
+  .val { width:64px; text-align:right; font-variant-numeric:tabular-nums; color:var(--accent2); }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px;
+        padding:10px 16px; font-size:14px; cursor:pointer; }
+  button:hover { background:var(--accent2); }
+  button.ghost { background:transparent; border:1px solid #2a3441; color:var(--fg); }
+  button.warn { background:var(--warn); }
+  .btns { display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
+  .preview { text-align:center; }
+  .preview img { max-width:100%; border:1px solid #2a3441; border-radius:8px;
+        background:#000; }
+  .src img { max-width:100%; border:1px solid #2a3441; border-radius:8px; }
+  .status { font-size:13px; margin-top:10px; min-height:18px; }
+  .status.ok { color:var(--ok); } .status.err { color:var(--warn); }
+  code { background:#0d1117; padding:2px 6px; border-radius:4px; font-size:12px; }
+  .hint { color:var(--muted); font-size:12px; margin-top:6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Wasserzähler – Rotation & Zuschnitt einstellen</h1>
+  <div class="sub">Werte live testen, Vorschau prüfen, dann speichern (überschreibt die Add-on-Konfiguration).</div>
+</header>
+
+<div class="wrap">
+  <div class="col">
+    <div class="card">
+      <h2>Quellbild</h2>
+      <div class="src"><img id="srcimg" alt="Quellbild" src="tuner/source.jpg?ts=0"></div>
+      <div class="btns">
+        <button id="fetchBtn">Neues Bild von Kamera holen</button>
+      </div>
+      <div class="hint">Holt ein frisches Bild (mit Lampe, wie im echten Ablauf). Dauert kurz.</div>
+    </div>
+
+    <div class="card">
+      <h2>Einstellungen</h2>
+      <label>Drehwinkel <span class="val" id="v_angle"></span></label>
+      <div class="row">
+        <input type="range" id="angle" min="-180" max="180" step="1">
+        <input type="number" id="angle_n" step="1">
+      </div>
+
+      <label>Füllfarbe der Ecken</label>
+      <select id="fill">
+        <option value="black">schwarz</option>
+        <option value="white">weiß</option>
+      </select>
+
+      <label>Zuschnitt oben <span class="val" id="v_top"></span></label>
+      <div class="row"><input type="range" id="crop_top" min="0" max="1000" step="5">
+        <input type="number" id="crop_top_n" step="5"></div>
+
+      <label>Zuschnitt unten <span class="val" id="v_bottom"></span></label>
+      <div class="row"><input type="range" id="crop_bottom" min="0" max="1000" step="5">
+        <input type="number" id="crop_bottom_n" step="5"></div>
+
+      <label>Zuschnitt links <span class="val" id="v_left"></span></label>
+      <div class="row"><input type="range" id="crop_left" min="0" max="1000" step="5">
+        <input type="number" id="crop_left_n" step="5"></div>
+
+      <label>Zuschnitt rechts <span class="val" id="v_right"></span></label>
+      <div class="row"><input type="range" id="crop_right" min="0" max="1000" step="5">
+        <input type="number" id="crop_right_n" step="5"></div>
+
+      <label>JPEG-Qualität <span class="val" id="v_q"></span></label>
+      <div class="row"><input type="range" id="q" min="1" max="95" step="1">
+        <input type="number" id="q_n" step="1"></div>
+    </div>
+  </div>
+
+  <div class="col">
+    <div class="card">
+      <h2>Vorschau (Ergebnis)</h2>
+      <div class="preview"><img id="preview" alt="Vorschau"></div>
+      <div class="status" id="pstatus"></div>
+    </div>
+
+    <div class="card">
+      <h2>Speichern</h2>
+      <div>Aktuelle Werte:</div>
+      <div class="hint" id="curvals"></div>
+      <div class="btns">
+        <button id="saveBtn">Werte speichern (überschreiben)</button>
+        <button id="resetBtn" class="ghost">Auf Add-on-Konfig zurücksetzen</button>
+      </div>
+      <div class="status" id="sstatus"></div>
+      <div class="hint">Gespeicherte Werte gelten sofort für alle nächsten Ablesungen,
+        bis du zurücksetzt.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const ids = ["angle","crop_top","crop_bottom","crop_left","crop_right"];
+const el = id => document.getElementById(id);
+
+function params() {
+  return {
+    rotate_angle: parseFloat(el("angle").value),
+    fill_color: el("fill").value,
+    crop_top: parseInt(el("crop_top").value),
+    crop_bottom: parseInt(el("crop_bottom").value),
+    crop_left: parseInt(el("crop_left").value),
+    crop_right: parseInt(el("crop_right").value),
+    jpeg_quality: parseInt(el("q").value),
+  };
+}
+
+function syncLabels() {
+  el("v_angle").textContent = el("angle").value + "°";
+  el("v_top").textContent = el("crop_top").value;
+  el("v_bottom").textContent = el("crop_bottom").value;
+  el("v_left").textContent = el("crop_left").value;
+  el("v_right").textContent = el("crop_right").value;
+  el("v_q").textContent = el("q").value;
+  const p = params();
+  el("curvals").textContent =
+    `Winkel ${p.rotate_angle}°, Ecken ${p.fill_color}, ` +
+    `oben ${p.crop_top}, unten ${p.crop_bottom}, links ${p.crop_left}, ` +
+    `rechts ${p.crop_right}, Qualität ${p.jpeg_quality}`;
+}
+
+let previewTimer = null;
+function updatePreview() {
+  syncLabels();
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => {
+    const p = params();
+    const q = new URLSearchParams(p).toString();
+    const st = el("pstatus");
+    st.className = "status"; st.textContent = "Rendere…";
+    const img = el("preview");
+    img.onload = () => { st.className="status ok"; st.textContent =
+      `OK (${img.naturalWidth}×${img.naturalHeight} px)`; };
+    img.onerror = () => { st.className="status err";
+      st.textContent = "Fehler – Schnittwerte passen evtl. nicht ins Bild."; };
+    img.src = "tuner/preview.jpg?" + q + "&ts=" + Date.now();
+  }, 200);
+}
+
+// Slider <-> Zahlenfeld koppeln
+function link(slider, number) {
+  const s = el(slider), n = el(number);
+  s.addEventListener("input", () => { n.value = s.value; updatePreview(); });
+  n.addEventListener("input", () => { s.value = n.value; updatePreview(); });
+}
+link("angle","angle_n"); link("crop_top","crop_top_n");
+link("crop_bottom","crop_bottom_n"); link("crop_left","crop_left_n");
+link("crop_right","crop_right_n"); link("q","q_n");
+el("fill").addEventListener("change", updatePreview);
+
+// Startwerte laden
+fetch("tuner/current").then(r=>r.json()).then(v => {
+  el("angle").value = v.rotate_angle; el("angle_n").value = v.rotate_angle;
+  el("fill").value = v.fill_color;
+  el("crop_top").value = v.crop_top; el("crop_top_n").value = v.crop_top;
+  el("crop_bottom").value = v.crop_bottom; el("crop_bottom_n").value = v.crop_bottom;
+  el("crop_left").value = v.crop_left; el("crop_left_n").value = v.crop_left;
+  el("crop_right").value = v.crop_right; el("crop_right_n").value = v.crop_right;
+  el("q").value = v.jpeg_quality; el("q_n").value = v.jpeg_quality;
+  updatePreview();
+});
+
+// Frisches Bild holen
+el("fetchBtn").addEventListener("click", () => {
+  const b = el("fetchBtn"); b.disabled = true; b.textContent = "Hole Bild…";
+  fetch("tuner/fetch_source", {method:"POST"}).then(r=>r.json()).then(d => {
+    b.disabled = false; b.textContent = "Neues Bild von Kamera holen";
+    if (d.ok) { el("srcimg").src = "tuner/source.jpg?ts=" + Date.now(); updatePreview(); }
+    else { alert("Fehler: " + (d.error||"unbekannt")); }
+  }).catch(e => { b.disabled=false; b.textContent="Neues Bild von Kamera holen";
+    alert("Fehler: " + e); });
+});
+
+// Speichern
+el("saveBtn").addEventListener("click", () => {
+  const st = el("sstatus"); st.className="status"; st.textContent="Speichere…";
+  fetch("tuner/save", {method:"POST", headers:{"Content-Type":"application/json"},
+    body: JSON.stringify(params())}).then(r=>r.json()).then(d => {
+    if (d.ok) { st.className="status ok"; st.textContent="Gespeichert – gilt ab jetzt."; }
+    else { st.className="status err"; st.textContent="Fehler: "+(d.error||""); }
+  });
+});
+
+// Zurücksetzen
+el("resetBtn").addEventListener("click", () => {
+  const st = el("sstatus"); st.className="status"; st.textContent="Setze zurück…";
+  fetch("tuner/reset", {method:"POST"}).then(r=>r.json()).then(d => {
+    st.className="status ok"; st.textContent="Zurückgesetzt – Add-on-Konfig gilt wieder.";
+    fetch("tuner/current").then(r=>r.json()).then(v => {
+      el("angle").value=v.rotate_angle; el("angle_n").value=v.rotate_angle;
+      el("fill").value=v.fill_color;
+      el("crop_top").value=v.crop_top; el("crop_top_n").value=v.crop_top;
+      el("crop_bottom").value=v.crop_bottom; el("crop_bottom_n").value=v.crop_bottom;
+      el("crop_left").value=v.crop_left; el("crop_left_n").value=v.crop_left;
+      el("crop_right").value=v.crop_right; el("crop_right_n").value=v.crop_right;
+      el("q").value=v.jpeg_quality; el("q_n").value=v.jpeg_quality;
+      updatePreview();
+    });
+  });
+});
+</script>
+</body>
+</html>

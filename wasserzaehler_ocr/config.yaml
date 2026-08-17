@@ -1,5 +1,5 @@
 name: "Wasserzähler Rotate & OCR"
-version: "4.6.1"
+version: "4.8.0"
 slug: "wasserzaehler_ocr"
 description: "Holt das Bild von der HA-Kamera, rotiert und schneidet es zu und liest den Wasserzähler per ausgelagertem Ollama-Vision-Modell aus – vollständig konfigurierbar"
 arch:
@@ -45,7 +45,7 @@ options:
   reject_implausible: true
   hold_last_on_failure: true
   last_value_path: "/config/watermeter/last_value.json"
-  log_max_bytes: 50000
+  tuning_path: "/config/watermeter/tuning.json"
 schema:
   camera_entity: str
   light_entity: "str?"
@@ -74,4 +74,4 @@ schema:
   reject_implausible: bool
   hold_last_on_failure: bool
   last_value_path: str
-  log_max_bytes: "int(1000,)"
+  tuning_path: str
