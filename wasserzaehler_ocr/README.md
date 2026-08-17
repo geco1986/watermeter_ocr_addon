@@ -276,10 +276,11 @@ Ablesevorgang live mitverfolgt werden kann.
 
 Über die Option `ocr_provider` wählst du, welche KI die Ziffern liest:
 
-- **ollama_local** – Ollama läuft direkt im Add-on. Beim ersten Start wird das
-  Modell (`ollama_model`) automatisch geladen und in `/data/ollama_models`
-  persistent gespeichert. Bequem, aber das Add-on-Image ist größer und die
-  Rechenlast liegt auf dem HA-Host.
+- **ollama_local** – Ollama läuft direkt im Add-on. Ollama wird beim ersten
+  Start mit diesem Anbieter heruntergeladen (persistent in `/data`, überlebt
+  Neustarts) und das Modell (`ollama_model`) automatisch geladen. Bequem, aber
+  die Rechenlast liegt auf dem HA-Host. Braucht beim ersten Start einmalig
+  Internet für den Ollama-Download; danach nicht mehr.
 - **ollama_remote** – ein externer Ollama-Server (Standard), über `ollama_url`.
 - **openai** – OpenAI Vision. Nötig: `openai_api_key`, `openai_model`
   (z. B. gpt-4o-mini).
