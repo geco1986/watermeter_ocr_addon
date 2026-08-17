@@ -112,7 +112,8 @@
 
   <div class="grid">
     <div class="card">
-      <h2>Ollama-Status</h2>
+      <h2>KI-Anbieter</h2>
+      <div class="kv"><span class="k">Anbieter</span><span class="v" id="ol_provider">–</span></div>
       <div class="kv"><span class="k">Verbindung</span><span class="v" id="ol_reach">–</span></div>
       <div class="kv"><span class="k">Modell</span><span class="v" id="ol_model">–</span></div>
       <div class="kv"><span class="k">Modell vorhanden</span><span class="v" id="ol_present">–</span></div>
@@ -139,6 +140,8 @@ function applyStatus(s){
   el("cur_value").textContent = fmt(s.stored_value," m³");
   el("cur_errcount").textContent = fmt(s.error_count);
   el("cur_last").textContent = agoText(s.stored_timestamp, s.now);
+  const provLabels = {ollama_local:"Ollama (im Add-on)", ollama_remote:"Ollama (extern)", openai:"OpenAI", gemini:"Gemini", claude:"Claude"};
+  if(s.provider) el("ol_provider").textContent = provLabels[s.provider] || s.provider;
   const dot = el("phase_dot");
   dot.className = "dot" + (s.running ? " run" : (s.phase==="error" ? " err" : (s.phase==="done" ? " ok" : "")));
   el("phase_text").textContent = (s.running?"läuft: ":"") + (phaseLabels[s.phase]||s.phase) + (s.running?" – "+s.phase_text:"");

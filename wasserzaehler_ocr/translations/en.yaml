@@ -41,6 +41,27 @@ configuration:
   jpeg_subsampling:
     name: JPEG-Subsampling
     description: 0 = 4:4:4 (beste Kantenschärfe für Ziffern), 1 = 4:2:2, 2 = 4:2:0.
+  ocr_provider:
+    name: OCR-Anbieter
+    description: "Welche KI die Ziffern liest: ollama_local (im Add-on), ollama_remote (externer Ollama-Server), openai, gemini oder claude."
+  openai_api_key:
+    name: OpenAI API-Schlüssel
+    description: API-Schlüssel für OpenAI (nur bei Anbieter openai nötig).
+  openai_model:
+    name: OpenAI-Modell
+    description: z. B. gpt-4o-mini oder gpt-4o.
+  gemini_api_key:
+    name: Gemini API-Schlüssel
+    description: API-Schlüssel für Google Gemini (nur bei Anbieter gemini nötig).
+  gemini_model:
+    name: Gemini-Modell
+    description: z. B. gemini-2.0-flash.
+  claude_api_key:
+    name: Claude API-Schlüssel
+    description: API-Schlüssel für Anthropic Claude (nur bei Anbieter claude nötig).
+  claude_model:
+    name: Claude-Modell
+    description: z. B. claude-3-5-sonnet-20241022.
   ollama_url:
     name: Ollama-URL
     description: Vollständige URL des ausgelagerten Ollama-Servers, z. B. http://192.168.3.50:11434/api/generate.

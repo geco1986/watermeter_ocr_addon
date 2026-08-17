@@ -271,3 +271,25 @@ Die Startseite (Button „Benutzeroberfläche öffnen") zeigt jetzt:
 
 Die Seite pollt den Status alle 2 Sekunden, sodass ein laufender
 Ablesevorgang live mitverfolgt werden kann.
+
+## KI-Anbieter wählen (lokal, extern oder Cloud)
+
+Über die Option `ocr_provider` wählst du, welche KI die Ziffern liest:
+
+- **ollama_local** – Ollama läuft direkt im Add-on. Beim ersten Start wird das
+  Modell (`ollama_model`) automatisch geladen und in `/data/ollama_models`
+  persistent gespeichert. Bequem, aber das Add-on-Image ist größer und die
+  Rechenlast liegt auf dem HA-Host.
+- **ollama_remote** – ein externer Ollama-Server (Standard), über `ollama_url`.
+- **openai** – OpenAI Vision. Nötig: `openai_api_key`, `openai_model`
+  (z. B. gpt-4o-mini).
+- **gemini** – Google Gemini. Nötig: `gemini_api_key`, `gemini_model`
+  (z. B. gemini-2.0-flash).
+- **claude** – Anthropic Claude. Nötig: `claude_api_key`, `claude_model`.
+
+Der aktive Anbieter und sein Status (erreichbar / Schlüssel gesetzt) werden auf
+der Übersichtsseite unter „KI-Anbieter" angezeigt.
+
+**Hinweis zu Cloud-Anbietern:** Es entstehen Kosten pro Anfrage, und das
+Zählerbild wird an den jeweiligen Dienst übertragen. Der API-Schlüssel wird in
+den Add-on-Optionen gespeichert.

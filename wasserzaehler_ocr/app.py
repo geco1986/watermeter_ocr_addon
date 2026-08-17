@@ -24,6 +24,7 @@ from flask import Flask, jsonify, request, send_file
 import fetch_image
 import rotate
 import ollama_ocr
+import ocr_providers
 import plausibility
 import tuning
 
@@ -49,6 +50,13 @@ DEFAULTS = {
     "ollama_keep_alive": 0,
     "ollama_timeout": 120,
     "ollama_force_json": True,
+    "ocr_provider": "ollama_remote",
+    "openai_api_key": "",
+    "openai_model": "gpt-4o-mini",
+    "gemini_api_key": "",
+    "gemini_model": "gemini-2.0-flash",
+    "claude_api_key": "",
+    "claude_model": "claude-3-5-sonnet-20241022",
     "ocr_main_digits": 5,
     "ocr_decimal_digits": 3,
     "plausibility_check": True,
@@ -177,17 +185,30 @@ def process():
         )
 
         # 3. OCR ueber ausgelagerten Ollama-Server
-        set_phase("ocr", f"OCR läuft ({OPTS['ollama_model']}) …")
-        result = ollama_ocr.read_digits_ollama(
+        provider = OPTS.get("ocr_provider", "ollama_remote")
+        # Effektive Optionen fuer den OCR-Aufruf. Bei lokalem Ollama zeigt die
+        # URL immer auf den Server im Container selbst.
+        ocr_opts = dict(OPTS)
+        if provider == "ollama_local":
+            ocr_opts["ollama_url"] = "http://127.0.0.1:11434/api/generate"
+
+        model_label = {
+            "ollama_local": f"Ollama lokal: {OPTS['ollama_model']}",
+            "ollama_remote": f"Ollama: {OPTS['ollama_model']}",
+            "openai": f"OpenAI: {OPTS['openai_model']}",
+            "gemini": f"Gemini: {OPTS['gemini_model']}",
+            "claude": f"Claude: {OPTS['claude_model']}",
+        }.get(provider, provider)
+        set_phase("ocr", f"OCR läuft ({model_label}) …")
+
+        result = ocr_providers.read_digits(
+            provider=provider,
             image_path=OPTS["dst_path"],
-            ollama_url=OPTS["ollama_url"],
-            model=OPTS["ollama_model"],
-            keep_alive=int(OPTS["ollama_keep_alive"]),
-            timeout=int(OPTS["ollama_timeout"]),
+            opts=ocr_opts,
             main_digits=int(OPTS["ocr_main_digits"]),
             decimal_digits=int(OPTS["ocr_decimal_digits"]),
+            timeout=int(OPTS["ollama_timeout"]),
             log=log,
-            force_json=bool(OPTS.get("ollama_force_json", True)),
         )
 
         log(f"OCR-Ergebnis: {result}")
@@ -377,6 +398,7 @@ def status_endpoint():
         "stored_value": state["value"],
         "stored_timestamp": state["timestamp"],
         "error_count": state["error_count"],
+        "provider": OPTS.get("ocr_provider", "ollama_remote"),
         "now": time.time(),
     })
 
@@ -389,36 +411,46 @@ def logs_endpoint():
 
 @app.route("/ollama_status", methods=["GET"])
 def ollama_status():
-    """Prueft, ob Ollama erreichbar ist und ob das Modell vorhanden ist."""
+    """Prueft den aktiven OCR-Anbieter (Ollama erreichbar / Cloud-Key gesetzt)."""
     import urllib.request
-    import urllib.error
 
-    # Aus der generate-URL die Basis ableiten (…/api/generate -> …/api/tags)
-    base = OPTS["ollama_url"].replace("/api/generate", "")
-    tags_url = f"{base}/api/tags"
-    model = OPTS["ollama_model"]
-    try:
-        with urllib.request.urlopen(tags_url, timeout=5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        names = [m.get("name", "") for m in data.get("models", [])]
-        # Modell kann mit oder ohne :tag angegeben sein
-        model_present = any(
-            n == model or n.split(":")[0] == model.split(":")[0]
-            for n in names
-        )
-        return jsonify({
-            "reachable": True,
-            "model": model,
-            "model_present": model_present,
-            "available_models": names,
-        })
-    except Exception as exc:  # noqa: BLE001
-        return jsonify({
-            "reachable": False,
-            "model": model,
-            "model_present": False,
-            "error": str(exc),
-        })
+    provider = OPTS.get("ocr_provider", "ollama_remote")
+
+    if provider in ("ollama_local", "ollama_remote"):
+        base = OPTS["ollama_url"].replace("/api/generate", "")
+        if provider == "ollama_local":
+            base = "http://127.0.0.1:11434"
+        tags_url = f"{base}/api/tags"
+        model = OPTS["ollama_model"]
+        try:
+            with urllib.request.urlopen(tags_url, timeout=5) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            names = [m.get("name", "") for m in data.get("models", [])]
+            present = any(n == model or n.split(":")[0] == model.split(":")[0]
+                          for n in names)
+            return jsonify({"provider": provider, "reachable": True,
+                            "model": model, "model_present": present,
+                            "available_models": names})
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"provider": provider, "reachable": False,
+                            "model": model, "model_present": False,
+                            "error": str(exc)})
+
+    # Cloud-Anbieter: wir pruefen nur, ob ein Schluessel gesetzt ist
+    key_map = {
+        "openai": ("openai_api_key", "openai_model"),
+        "gemini": ("gemini_api_key", "gemini_model"),
+        "claude": ("claude_api_key", "claude_model"),
+    }
+    keyname, modelname = key_map.get(provider, (None, None))
+    has_key = bool(OPTS.get(keyname, "")) if keyname else False
+    return jsonify({
+        "provider": provider,
+        "reachable": has_key,
+        "model": OPTS.get(modelname, "") if modelname else "",
+        "model_present": has_key,
+        "error": None if has_key else "kein API-Schlüssel gesetzt",
+    })
 
 
 @app.route("/tuner", methods=["GET"])

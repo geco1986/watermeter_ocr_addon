@@ -1,5 +1,5 @@
 name: "Wasserzähler Rotate & OCR"
-version: "4.10.0"
+version: "4.11.0"
 slug: "wasserzaehler_ocr"
 description: "Holt das Bild von der HA-Kamera, rotiert und schneidet es zu und liest den Wasserzähler per ausgelagertem Ollama-Vision-Modell aus – vollständig konfigurierbar"
 arch:
@@ -41,6 +41,13 @@ options:
   ollama_keep_alive: 0
   ollama_timeout: 120
   ollama_force_json: true
+  ocr_provider: "ollama_remote"
+  openai_api_key: ""
+  openai_model: "gpt-4o-mini"
+  gemini_api_key: ""
+  gemini_model: "gemini-2.0-flash"
+  claude_api_key: ""
+  claude_model: "claude-3-5-sonnet-20241022"
   ocr_main_digits: 5
   ocr_decimal_digits: 3
   plausibility_check: true
@@ -70,6 +77,13 @@ schema:
   ollama_keep_alive: int
   ollama_timeout: "int(5,)"
   ollama_force_json: bool
+  ocr_provider: "list(ollama_local|ollama_remote|openai|gemini|claude)"
+  openai_api_key: "str?"
+  openai_model: str
+  gemini_api_key: "str?"
+  gemini_model: str
+  claude_api_key: "str?"
+  claude_model: str
   ocr_main_digits: "int(0,)"
   ocr_decimal_digits: "int(0,)"
   plausibility_check: bool
