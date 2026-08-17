@@ -1,0 +1,77 @@
+name: "Wasserzähler Rotate & OCR"
+version: "4.6.1"
+slug: "wasserzaehler_ocr"
+description: "Holt das Bild von der HA-Kamera, rotiert und schneidet es zu und liest den Wasserzähler per ausgelagertem Ollama-Vision-Modell aus – vollständig konfigurierbar"
+arch:
+  - amd64
+  - aarch64
+startup: application
+boot: auto
+hassio_api: true
+homeassistant_api: true
+ports:
+  5000/tcp: 5000
+ports_description:
+  5000/tcp: "HTTP-API (GET /process, GET /health)"
+map:
+  - type: homeassistant_config
+    read_only: false
+    path: /config
+options:
+  camera_entity: "camera.esp32_cam_esp32_kamera"
+  light_entity: "light.esp32_cam_kamera_blitzlicht"
+  light_warmup: 10
+  dst_path: "/config/watermeter/watermeter_rotated.jpg"
+  src_path: "/config/watermeter/watermeter_image.jpg"
+  save_source: true
+  rotate_angle: 53
+  fill_color: "black"
+  crop_top: 400
+  crop_bottom: 340
+  crop_left: 75
+  crop_right: 200
+  jpeg_quality: 92
+  jpeg_subsampling: 0
+  ollama_url: "http://192.168.3.3:11434/api/generate"
+  ollama_model: "gemma4:e2b"
+  ollama_keep_alive: 0
+  ollama_timeout: 120
+  ollama_force_json: true
+  ocr_main_digits: 5
+  ocr_decimal_digits: 3
+  plausibility_check: true
+  max_increase: 5.0
+  allow_equal: true
+  reject_implausible: true
+  hold_last_on_failure: true
+  last_value_path: "/config/watermeter/last_value.json"
+  log_max_bytes: 50000
+schema:
+  camera_entity: str
+  light_entity: "str?"
+  light_warmup: "int(0,)"
+  dst_path: str
+  src_path: str
+  save_source: bool
+  rotate_angle: float
+  fill_color: "list(black|white)"
+  crop_top: "int(0,)"
+  crop_bottom: "int(0,)"
+  crop_left: "int(0,)"
+  crop_right: "int(0,)"
+  jpeg_quality: "int(1,95)"
+  jpeg_subsampling: "int(0,2)"
+  ollama_url: str
+  ollama_model: str
+  ollama_keep_alive: int
+  ollama_timeout: "int(5,)"
+  ollama_force_json: bool
+  ocr_main_digits: "int(0,)"
+  ocr_decimal_digits: "int(0,)"
+  plausibility_check: bool
+  max_increase: float
+  allow_equal: bool
+  reject_implausible: bool
+  hold_last_on_failure: bool
+  last_value_path: str
+  log_max_bytes: "int(1000,)"

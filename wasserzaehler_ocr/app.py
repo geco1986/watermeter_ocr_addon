@@ -1,0 +1,293 @@
+"""Wasserzaehler Rotate & OCR - Home-Assistant-Add-on (Ollama-Variante).
+
+Kette pro /process-Aufruf:
+  1. Bild von der HA-Kamera-Entitaet holen (camera_proxy)
+  2. Rotieren + Zuschneiden (Logik aus cam_rotate.py)
+  3. Zugeschnittenes Bild an ausgelagerten Ollama-Vision-Server schicken
+  4. Ergebnis als JSON an Home Assistant zurueckgeben
+
+Endpunkte:
+  GET /process  -> ganze Kette; liefert JSON
+  GET /health   -> {"status": "ok"}
+"""
+
+import json
+import sys
+import time
+import traceback
+from datetime import datetime
+from pathlib import Path
+
+from flask import Flask, jsonify, request
+
+import fetch_image
+import rotate
+import ollama_ocr
+import plausibility
+
+OPTIONS_PATH = Path("/data/options.json")
+
+DEFAULTS = {
+    "camera_entity": "camera.esp32_cam_esp32_kamera",
+    "light_entity": "light.esp32_cam_kamera_blitzlicht",
+    "light_warmup": 10,
+    "src_path": "/config/watermeter/watermeter_image.jpg",
+    "dst_path": "/config/watermeter/watermeter_rotated.jpg",
+    "save_source": True,
+    "rotate_angle": 53,
+    "fill_color": "black",
+    "crop_top": 400,
+    "crop_bottom": 340,
+    "crop_left": 75,
+    "crop_right": 200,
+    "jpeg_quality": 92,
+    "jpeg_subsampling": 0,
+    "ollama_url": "http://192.168.3.3:11434/api/generate",
+    "ollama_model": "gemma4:e2b",
+    "ollama_keep_alive": 0,
+    "ollama_timeout": 120,
+    "ollama_force_json": True,
+    "ocr_main_digits": 5,
+    "ocr_decimal_digits": 3,
+    "plausibility_check": True,
+    "max_increase": 5.0,
+    "allow_equal": True,
+    "reject_implausible": True,
+    "hold_last_on_failure": True,
+    "last_value_path": "/config/watermeter/last_value.json",
+    "log_max_bytes": 50000,
+}
+
+
+def load_options():
+    opts = dict(DEFAULTS)
+    if OPTIONS_PATH.exists():
+        try:
+            with OPTIONS_PATH.open(encoding="utf-8") as fh:
+                opts.update(json.load(fh))
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"WARNUNG: options.json nicht lesbar ({exc}), nutze Defaults",
+                  file=sys.stderr)
+    return opts
+
+
+OPTS = load_options()
+LOG_PATH = Path(OPTS["dst_path"]).parent / "wasserzaehler_ocr.log"
+
+
+def log(msg: str) -> None:
+    try:
+        max_bytes = OPTS.get("log_max_bytes", 50000)
+        if LOG_PATH.exists() and LOG_PATH.stat().st_size > max_bytes:
+            LOG_PATH.unlink()
+        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with LOG_PATH.open("a", encoding="utf-8") as fh:
+            fh.write(f"{stamp}  {msg}\n")
+    except OSError:
+        print(msg, file=sys.stderr)
+
+
+app = Flask(__name__)
+
+
+@app.route("/process", methods=["GET"])
+def process():
+    log("--- Start /process ---")
+    try:
+        # 1. Bild von der Kamera holen
+        # Wenn save_source aktiv ist, legen wir das Rohbild unter src_path ab,
+        # sonst direkt als Arbeitsdatei.
+        raw_target = Path(OPTS["src_path"]) if OPTS.get("save_source", True) \
+            else Path(OPTS["dst_path"]).with_suffix(".raw.jpg")
+
+        light_entity = OPTS.get("light_entity", "")
+        warmup = int(OPTS.get("light_warmup", 10))
+
+        try:
+            # Lampe an, kurz warten bis sie voll ausgeleuchtet ist
+            if light_entity:
+                fetch_image.set_light(light_entity, True,
+                                      timeout=15, log=log)
+                if warmup > 0:
+                    log(f"Warte {warmup}s auf Ausleuchtung ...")
+                    time.sleep(warmup)
+
+            # Bild holen
+            fetch_image.fetch_camera_image(
+                camera_entity=OPTS["camera_entity"],
+                dst_path=raw_target,
+                timeout=int(OPTS["ollama_timeout"]),
+                log=log,
+            )
+        finally:
+            # Lampe immer wieder aus - auch wenn der Abruf fehlschlug
+            if light_entity:
+                fetch_image.set_light(light_entity, False,
+                                      timeout=15, log=log)
+
+        # 2. Rotation + Zuschnitt (Rohbild -> dst_path)
+        rotate.rotate_and_crop(
+            src_path=raw_target,
+            dst_path=Path(OPTS["dst_path"]),
+            angle=float(OPTS["rotate_angle"]),
+            fill_color=OPTS["fill_color"],
+            crop_top=int(OPTS["crop_top"]),
+            crop_bottom=int(OPTS["crop_bottom"]),
+            crop_left=int(OPTS["crop_left"]),
+            crop_right=int(OPTS["crop_right"]),
+            quality=int(OPTS["jpeg_quality"]),
+            subsampling=int(OPTS["jpeg_subsampling"]),
+            log=log,
+        )
+
+        # 3. OCR ueber ausgelagerten Ollama-Server
+        result = ollama_ocr.read_digits_ollama(
+            image_path=OPTS["dst_path"],
+            ollama_url=OPTS["ollama_url"],
+            model=OPTS["ollama_model"],
+            keep_alive=int(OPTS["ollama_keep_alive"]),
+            timeout=int(OPTS["ollama_timeout"]),
+            main_digits=int(OPTS["ocr_main_digits"]),
+            decimal_digits=int(OPTS["ocr_decimal_digits"]),
+            log=log,
+            force_json=bool(OPTS.get("ollama_force_json", True)),
+        )
+
+        log(f"OCR-Ergebnis: {result}")
+
+        # 4. Zustand laden (letzter Wert, Zeit, Fehlerzaehler)
+        state_path = Path(OPTS["last_value_path"])
+        state = plausibility.load_state(state_path, log)
+        last_value = state["value"]
+        last_timestamp = state["timestamp"]
+        error_count = state["error_count"]
+
+        now = time.time()
+        ocr_failed = result.get("raw_digits") is None
+
+        # 5. Plausibilitaetspruefung (nur wenn OCR ueberhaupt Ziffern lieferte)
+        plausible = True
+        reason = None
+        if not ocr_failed and OPTS.get("plausibility_check", True):
+            value = result["value"]
+            plausible, reason = plausibility.check(
+                value=value,
+                last_value=last_value,
+                max_increase=float(OPTS["max_increase"]),
+                allow_equal=bool(OPTS["allow_equal"]),
+                log=log,
+            )
+            result["plausible"] = plausible
+            result["last_value"] = last_value
+            if not plausible:
+                log(f"UNPLAUSIBEL: {reason}")
+                result["error"] = reason
+                result["rejected"] = True
+
+        # Ein frischer, gueltiger Wert liegt vor, wenn OCR erfolgreich UND plausibel war
+        valid = (not ocr_failed) and plausible
+        hold = bool(OPTS.get("hold_last_on_failure", True))
+
+        # 6. Durchflussrate + Status + Fehlerzaehler + Zustand aktualisieren
+        if valid:
+            value = result["value"]
+            rate = plausibility.flow_rate_l_min(
+                value=value, last_value=last_value,
+                last_timestamp=last_timestamp, now=now, log=log,
+            )
+            result["flow_rate_l_min"] = rate
+            result["status"] = "ok"
+            result["error_count"] = 0
+            result["held"] = False
+            # neuen guten Zustand speichern
+            plausibility.save_state(state_path, {
+                "value": value, "timestamp": now, "error_count": 0,
+            }, log)
+        else:
+            # Kein frischer gueltiger Wert (OCR fehlgeschlagen ODER unplausibel).
+            error_count += 1
+            result["flow_rate_l_min"] = 0.0
+            result["error_count"] = error_count
+            result["status"] = result.get("error", "Fehler")
+
+            if hold and last_value is not None:
+                # Letzten guten Wert weiter als gueltigen Zaehlerstand liefern,
+                # damit der Sensor nicht auf 'unbekannt' faellt. Die frische
+                # OCR (raw_digits) bleibt null - sie ist ja fehlgeschlagen.
+                result["value"] = last_value
+                result["held"] = True
+                log(f"Halte letzten guten Wert: {last_value}")
+            else:
+                # Kein Vorwert vorhanden (z. B. erster Lauf) - nichts zu halten.
+                result["value"] = None
+                result["held"] = False
+
+            # Zustand: letzten guten Wert/Zeit behalten, nur Fehlerzaehler hoch
+            plausibility.save_state(state_path, {
+                "value": last_value, "timestamp": last_timestamp,
+                "error_count": error_count,
+            }, log)
+
+        log(f"Ergebnis: {result}")
+        # Status 200, solange ein gueltiger (frischer ODER gehaltener) Wert
+        # vorliegt. Nur ganz ohne Wert (erster Lauf gescheitert) -> 422.
+        status = 200 if result.get("value") is not None else 422
+        return jsonify(result), status
+
+    except FileNotFoundError as exc:
+        log(f"FEHLER: {exc}")
+        return jsonify({"raw_digits": None, "error": str(exc)}), 404
+    except ValueError as exc:
+        log(f"FEHLER: {exc}")
+        return jsonify({"raw_digits": None, "error": str(exc)}), 400
+    except Exception:
+        tb = traceback.format_exc()
+        log("UNBEHANDELTER FEHLER:\n" + tb)
+        return jsonify({"raw_digits": None, "error": "interner Fehler"}), 500
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok"})
+
+
+@app.route("/set_value", methods=["GET", "POST"])
+def set_value():
+    """Setzt den gespeicherten Zaehlerstand manuell (Korrektur).
+
+    Nuetzlich, wenn ein legitimer grosser Sprung von der Plausibilitaets-
+    pruefung blockiert wird. Der Zeitstempel wird auf jetzt gesetzt, damit
+    die Durchflussberechnung frisch ab diesem Moment startet. Der
+    Fehlerzaehler wird zurueckgesetzt.
+
+    Aufruf: /set_value?value=1265.500  (oder POST mit JSON {"value": 1265.5})
+    """
+    # Wert aus Query-Parameter oder JSON-Body holen
+    raw = request.args.get("value")
+    if raw is None and request.is_json:
+        raw = (request.get_json(silent=True) or {}).get("value")
+
+    if raw is None:
+        return jsonify({"ok": False, "error": "kein 'value' angegeben"}), 400
+
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": f"'{raw}' ist keine Zahl"}), 400
+
+    state_path = Path(OPTS["last_value_path"])
+    now = time.time()
+    plausibility.save_state(state_path, {
+        "value": value, "timestamp": now, "error_count": 0,
+    }, log)
+    log(f"Wert manuell gesetzt: {value} (Zeitstempel neu, Fehlerzaehler 0)")
+
+    return jsonify({"ok": True, "value": value})
+
+
+if __name__ == "__main__":
+    log(f"Add-on gestartet, Python {sys.version.split()[0]}")
+    safe_opts = {k: v for k, v in OPTS.items()}
+    log(f"Optionen: {safe_opts}")
+    app.run(host="0.0.0.0", port=5000)
