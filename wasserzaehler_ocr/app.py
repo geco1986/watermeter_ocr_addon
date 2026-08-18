@@ -28,6 +28,7 @@ import plausibility
 import tuning
 import settings
 import sysinfo
+import history
 
 OPTIONS_PATH = Path("/data/options.json")
 SETTINGS_PATH = Path("/data/settings.json")
@@ -38,6 +39,7 @@ PATHS = {
     "dst_path": "/data/watermeter_rotated.jpg",
     "last_value_path": "/data/last_value.json",
     "tuning_path": "/data/tuning.json",
+    "history_path": "/data/history.json",
 }
 
 # Werte, die weder ueber die Supervisor-Konfiguration noch ueber die
@@ -298,6 +300,8 @@ def process():
             plausibility.save_state(state_path, {
                 "value": value, "timestamp": now, "error_count": 0,
             }, log)
+            # fuer die Verbrauchsgrafik (Tag/Woche/Monat/Jahr) merken
+            history.record(Path(cfg["history_path"]), value, now, log)
         else:
             # Kein frischer gueltiger Wert (OCR fehlgeschlagen ODER unplausibel).
             error_count += 1
@@ -502,6 +506,14 @@ def ollama_status():
         "model_present": has_key,
         "error": None if has_key else "kein API-Schlüssel gesetzt",
     })
+
+
+@app.route("/chart_data", methods=["GET"])
+def chart_data():
+    """Verbrauchsdaten (Liter) für Tag/Woche/Monat/Jahr, für die Grafik."""
+    cfg = get_config(log)
+    data = history.get_chart_data(Path(cfg["history_path"]), time.time(), log)
+    return jsonify(data)
 
 
 @app.route("/settings", methods=["GET"])

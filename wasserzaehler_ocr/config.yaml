@@ -1,5 +1,5 @@
 name: "Wasserzähler OCR"
-version: "5.1.0"
+version: "5.2.0"
 slug: "wasserzaehler_ocr"
 description: "Liest den Wasserzähler automatisch aus Kamerabildern. Alle Einstellungen (Kamera, OCR-Anbieter, Zuschnitt, Plausibilität) werden über die eingebaute Weboberfläche vorgenommen – Klick auf 'Benutzeroberfläche öffnen'."
 arch:

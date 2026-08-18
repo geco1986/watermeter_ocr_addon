@@ -25,6 +25,7 @@
   button:hover, a.btn:hover { background:var(--accent2); }
   button:disabled { opacity:.6; cursor:default; }
   a.btn.ghost, button.ghost { background:transparent; border:1px solid #2a3441; color:var(--fg); }
+  button.chartTab.active { background:var(--accent2); border-color:var(--accent2); color:#fff; }
   .btns { display:flex; gap:10px; flex-wrap:wrap; }
   .kv { display:flex; justify-content:space-between; padding:7px 0; border-bottom:1px solid #222c36; font-size:14px; gap:12px; }
   .kv:last-child { border-bottom:0; }
@@ -104,6 +105,18 @@
       </div>
       <div class="status" id="setStatus"></div>
     </div>
+  </div>
+
+  <div class="card">
+    <h2>Wasserverbrauch</h2>
+    <div style="display:flex;gap:8px;margin-bottom:14px;">
+      <button class="ghost chartTab active" data-period="day" style="padding:6px 14px;font-size:13px;">Tag</button>
+      <button class="ghost chartTab" data-period="week" style="padding:6px 14px;font-size:13px;">Woche</button>
+      <button class="ghost chartTab" data-period="month" style="padding:6px 14px;font-size:13px;">Monat</button>
+      <button class="ghost chartTab" data-period="year" style="padding:6px 14px;font-size:13px;">Jahr</button>
+    </div>
+    <svg id="chartSvg" viewBox="0 0 600 220" style="width:100%;height:auto;display:block;"></svg>
+    <div class="muted" id="chartEmpty" style="text-align:center;padding:10px;"></div>
   </div>
 
   <div class="card">
@@ -193,6 +206,74 @@ function checkOllama(){ const st=el("olStatus"); st.className="status"; st.textC
     st.textContent = d.reachable ? (d.model_present ? "Alles bereit." : "Verbunden, aber Modell nicht gefunden.") : ("Nicht erreichbar: "+(d.error||""));
   }).catch(e=>{ st.className="status err"; st.textContent="Fehler: "+e; }); }
 el("olBtn").addEventListener("click", checkOllama);
+
+// --- Verbrauchsgrafik ---
+let chartCache = null;
+let currentPeriod = "day";
+
+function drawChart(period) {
+  if (!chartCache) return;
+  const points = chartCache[period] || [];
+  const svg = el("chartSvg");
+  const W = 600, H = 220, padL = 36, padB = 26, padT = 10, padR = 10;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+
+  const values = points.map(p => p.liters).filter(v => v !== null && v !== undefined);
+  const max = values.length ? Math.max(...values, 1) : 1;
+
+  if (!values.length) {
+    svg.innerHTML = "";
+    el("chartEmpty").textContent = "Noch keine Daten für diesen Zeitraum – sie sammeln sich mit jeder erfolgreichen Auswertung.";
+    return;
+  }
+  el("chartEmpty").textContent = "";
+
+  const n = points.length;
+  const gap = 4;
+  const barW = Math.max(2, (plotW / n) - gap);
+  let svgParts = [];
+
+  // Gitterlinie + Achsenbeschriftung oben (Max-Wert)
+  svgParts.push(`<line x1="${padL}" y1="${padT}" x2="${W-padR}" y2="${padT}" stroke="#2a3441" stroke-width="1"/>`);
+  svgParts.push(`<text x="${padL-6}" y="${padT+4}" text-anchor="end" font-size="10" fill="#8b98a5">${Math.round(max)}</text>`);
+  svgParts.push(`<line x1="${padL}" y1="${padT+plotH}" x2="${W-padR}" y2="${padT+plotH}" stroke="#2a3441" stroke-width="1"/>`);
+
+  points.forEach((p, i) => {
+    const x = padL + i * (plotW / n) + gap/2;
+    const v = p.liters;
+    const isNull = (v === null || v === undefined);
+    const h = isNull ? 0 : Math.max(isNull?0:1, (v / max) * plotH);
+    const y = padT + plotH - h;
+    const color = isNull ? "#1c2530" : "#2f81f7";
+    svgParts.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${h.toFixed(1)}" fill="${color}" rx="2">
+      <title>${p.label}: ${isNull ? 'keine Daten' : v + ' L'}</title>
+    </rect>`);
+    // nicht jedes Label zeigen, wenn zu viele Balken (Monat: 30) - jedes 3./5. zeigen
+    const showEvery = n > 20 ? 5 : (n > 10 ? 2 : 1);
+    if (i % showEvery === 0) {
+      svgParts.push(`<text x="${(x+barW/2).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="9" fill="#8b98a5">${p.label}</text>`);
+    }
+  });
+
+  svg.innerHTML = svgParts.join("");
+}
+
+function loadChart() {
+  fetch("chart_data").then(r=>r.json()).then(d => { chartCache = d; drawChart(currentPeriod); }).catch(()=>{});
+}
+
+document.querySelectorAll(".chartTab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".chartTab").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentPeriod = btn.dataset.period;
+    drawChart(currentPeriod);
+  });
+});
+
+loadChart();
+setInterval(loadChart, 60000); // Grafik minütlich aktualisieren (unabhängig vom 2s-Status-Poll)
+
 refreshImages(); checkOllama(); poll(); setInterval(poll, 2000);
 </script>
 </body>

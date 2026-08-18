@@ -9,6 +9,11 @@ Zählerstand, Durchflussrate und Status.
 > einem separaten Repository und wird über HACS installiert. Dieses Repository
 > hier ist nur das Add-on.
 
+## Vor dem Hochladen zu GitHub
+
+Ersetze in `repository.yaml` den Platzhalter `DEIN-USER` durch deinen echten
+GitHub-Benutzernamen bzw. die echte Repo-URL.
+
 ## Installation über den Add-on-Store
 
 1. Dieses Repository zu GitHub hochladen (siehe unten).

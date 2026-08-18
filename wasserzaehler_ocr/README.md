@@ -196,3 +196,15 @@ erreichbar; ansehen kannst du sie auf der Übersichtsseite.
 - Neuer OCR-Anbieter „Tesseract" (klassische, lokale OCR ohne KI-Modell).
 - RAM-basierte Modellempfehlung auf der Konfigurationsseite.
 - Alte Konfigurationswerte werden beim Update automatisch übernommen.
+
+## Verbrauchsgrafik (ab 5.2.0)
+
+Die Übersichtsseite zeigt jetzt ein Balkendiagramm mit vier Zeiträumen (Tag,
+Woche, Monat, Jahr), umschaltbar per Tab. Die Daten sammeln sich mit jeder
+erfolgreichen Ablesung – bei einer frischen Installation ist die Grafik also
+zunächst leer und füllt sich über Tage/Wochen. Es gibt keine rückwirkende
+Befüllung aus der Zeit vor diesem Update.
+
+Gespeichert werden nur kompakte Stunden- und Tages-Schnappschüsse (kein
+unbegrenzt wachsendes Rohdaten-Log), begrenzt auf 48 Stunden bzw. 400 Tage -
+das reicht für alle vier Ansichten und bleibt im Kilobyte-Bereich.
