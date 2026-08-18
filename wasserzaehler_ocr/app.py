@@ -23,19 +23,26 @@ from flask import Flask, jsonify, request, send_file
 
 import fetch_image
 import rotate
-import ollama_ocr
 import ocr_providers
 import plausibility
 import tuning
+import settings
+import sysinfo
 
 OPTIONS_PATH = Path("/data/options.json")
+SETTINGS_PATH = Path("/data/settings.json")
 
-DEFAULTS = {
-    "camera_entity": "camera.esp32_cam_esp32_kamera",
-    "light_entity": "light.esp32_cam_kamera_blitzlicht",
-    "light_warmup": 10,
+# Interne, feste Pfade - nicht ueber die Konfiguration einstellbar.
+PATHS = {
     "src_path": "/data/watermeter_image.jpg",
     "dst_path": "/data/watermeter_rotated.jpg",
+    "last_value_path": "/data/last_value.json",
+    "tuning_path": "/data/tuning.json",
+}
+
+# Werte, die weder ueber die Supervisor-Konfiguration noch ueber die
+# Web-UI-Einstellungsseite veraendert werden (interne Konstanten).
+INTERNAL_DEFAULTS = {
     "save_source": True,
     "rotate_angle": 53,
     "fill_color": "black",
@@ -45,12 +52,23 @@ DEFAULTS = {
     "crop_right": 200,
     "jpeg_quality": 92,
     "jpeg_subsampling": 0,
-    "ollama_url": "http://192.168.3.3:11434/api/generate",
-    "ollama_model": "gemma4:e2b",
     "ollama_keep_alive": 0,
-    "ollama_timeout": 120,
     "ollama_force_json": True,
+    "allow_equal": True,
+    "reject_implausible": True,
+}
+
+# Defaults fuer alles, was ueber die Konfiguration-Webseite einstellbar ist
+# (settings.py SETTINGS_KEYS). Diese Werte gelten, solange settings.json
+# noch keinen eigenen Wert dafuer hat.
+SETTINGS_DEFAULTS = {
+    "camera_entity": "",
+    "light_entity": "",
+    "light_warmup": 10,
     "ocr_provider": "ollama_remote",
+    "ollama_url": "",
+    "ollama_model": "moondream",
+    "ollama_timeout": 120,
     "openai_api_key": "",
     "openai_model": "gpt-4o-mini",
     "gemini_api_key": "",
@@ -61,27 +79,37 @@ DEFAULTS = {
     "ocr_decimal_digits": 3,
     "plausibility_check": True,
     "max_increase": 5.0,
-    "allow_equal": True,
-    "reject_implausible": True,
     "hold_last_on_failure": True,
-    "last_value_path": "/data/last_value.json",
-    "tuning_path": "/data/tuning.json",
 }
+
+DEFAULTS = {**PATHS, **INTERNAL_DEFAULTS, **SETTINGS_DEFAULTS}
 
 
 def load_options():
-    opts = dict(DEFAULTS)
+    """Liest die (heute meist leere) Supervisor-Konfiguration - dient nur
+    noch als Kompatibilitaets-/Migrationsquelle fuer sehr alte Installationen."""
+    opts = {}
     if OPTIONS_PATH.exists():
         try:
             with OPTIONS_PATH.open(encoding="utf-8") as fh:
-                opts.update(json.load(fh))
+                opts = json.load(fh)
         except (OSError, json.JSONDecodeError) as exc:
-            print(f"WARNUNG: options.json nicht lesbar ({exc}), nutze Defaults",
-                  file=sys.stderr)
+            print(f"WARNUNG: options.json nicht lesbar ({exc})", file=sys.stderr)
     return opts
 
 
-OPTS = load_options()
+LEGACY_OPTS = load_options()
+
+
+def get_config(log=None):
+    """Liefert die aktuell gueltige, vollstaendige Konfiguration.
+
+    Wird pro Request neu berechnet, damit Aenderungen ueber die
+    Konfiguration-Webseite sofort greifen - ohne Add-on-Neustart.
+    """
+    cfg = dict(DEFAULTS)
+    cfg.update(settings.effective(SETTINGS_DEFAULTS, SETTINGS_PATH, log))
+    return cfg
 
 # Logging direkt nach stdout - Home Assistant zeigt das im Add-on-Protokoll an.
 logging.basicConfig(
@@ -115,6 +143,12 @@ def log(msg: str) -> None:
     _LOG_BUFFER.append(f"{stamp}  {msg}")
 
 
+# Einmalige Migration: Werte aus einer alten Supervisor-Konfiguration (vor
+# der Umstellung auf die Web-UI-Konfiguration) in die neuen Einstellungen
+# uebernehmen, falls noch keine settings.json existiert.
+settings.migrate_from_legacy(SETTINGS_DEFAULTS, LEGACY_OPTS, SETTINGS_PATH, log=log)
+
+
 def set_phase(phase: str, text: str) -> None:
     """Aktualisiert den Live-Prozessstatus."""
     PROCESS_STATE["phase"] = phase
@@ -127,6 +161,7 @@ app = Flask(__name__)
 
 @app.route("/process", methods=["GET"])
 def process():
+    cfg = get_config(log)
     log("--- Start /process ---")
     PROCESS_STATE["running"] = True
     PROCESS_STATE["started_at"] = time.time()
@@ -135,11 +170,11 @@ def process():
         # 1. Bild von der Kamera holen
         # Wenn save_source aktiv ist, legen wir das Rohbild unter src_path ab,
         # sonst direkt als Arbeitsdatei.
-        raw_target = Path(OPTS["src_path"]) if OPTS.get("save_source", True) \
-            else Path(OPTS["dst_path"]).with_suffix(".raw.jpg")
+        raw_target = Path(cfg["src_path"]) if cfg.get("save_source", True) \
+            else Path(cfg["dst_path"]).with_suffix(".raw.jpg")
 
-        light_entity = OPTS.get("light_entity", "")
-        warmup = int(OPTS.get("light_warmup", 10))
+        light_entity = cfg.get("light_entity", "")
+        warmup = int(cfg.get("light_warmup", 10))
 
         try:
             # Lampe an, kurz warten bis sie voll ausgeleuchtet ist
@@ -155,9 +190,9 @@ def process():
             # Bild holen
             set_phase("fetch", "Hole Bild von der Kamera …")
             fetch_image.fetch_camera_image(
-                camera_entity=OPTS["camera_entity"],
+                camera_entity=cfg["camera_entity"],
                 dst_path=raw_target,
-                timeout=int(OPTS["ollama_timeout"]),
+                timeout=int(cfg["ollama_timeout"]),
                 log=log,
             )
         finally:
@@ -169,10 +204,10 @@ def process():
         # 2. Rotation + Zuschnitt (Rohbild -> dst_path)
         # Effektive Werte: Add-on-Optionen, ueberschrieben von Tuner-Werten
         set_phase("rotate", "Rotiere und schneide zu …")
-        eff = tuning.effective(OPTS, Path(OPTS["tuning_path"]), log)
+        eff = tuning.effective(cfg, Path(cfg["tuning_path"]), log)
         rotate.rotate_and_crop(
             src_path=raw_target,
-            dst_path=Path(OPTS["dst_path"]),
+            dst_path=Path(cfg["dst_path"]),
             angle=float(eff["rotate_angle"]),
             fill_color=eff["fill_color"],
             crop_top=int(eff["crop_top"]),
@@ -185,29 +220,30 @@ def process():
         )
 
         # 3. OCR ueber ausgelagerten Ollama-Server
-        provider = OPTS.get("ocr_provider", "ollama_remote")
+        provider = cfg.get("ocr_provider", "ollama_remote")
         # Effektive Optionen fuer den OCR-Aufruf. Bei lokalem Ollama zeigt die
         # URL immer auf den Server im Container selbst.
-        ocr_opts = dict(OPTS)
+        ocr_opts = dict(cfg)
         if provider == "ollama_local":
             ocr_opts["ollama_url"] = "http://127.0.0.1:11434/api/generate"
 
         model_label = {
-            "ollama_local": f"Ollama lokal: {OPTS['ollama_model']}",
-            "ollama_remote": f"Ollama: {OPTS['ollama_model']}",
-            "openai": f"OpenAI: {OPTS['openai_model']}",
-            "gemini": f"Gemini: {OPTS['gemini_model']}",
-            "claude": f"Claude: {OPTS['claude_model']}",
+            "tesseract": "Tesseract (lokal, kein KI-Modell)",
+            "ollama_local": f"Ollama lokal: {cfg['ollama_model']}",
+            "ollama_remote": f"Ollama: {cfg['ollama_model']}",
+            "openai": f"OpenAI: {cfg['openai_model']}",
+            "gemini": f"Gemini: {cfg['gemini_model']}",
+            "claude": f"Claude: {cfg['claude_model']}",
         }.get(provider, provider)
         set_phase("ocr", f"OCR läuft ({model_label}) …")
 
         result = ocr_providers.read_digits(
             provider=provider,
-            image_path=OPTS["dst_path"],
+            image_path=cfg["dst_path"],
             opts=ocr_opts,
-            main_digits=int(OPTS["ocr_main_digits"]),
-            decimal_digits=int(OPTS["ocr_decimal_digits"]),
-            timeout=int(OPTS["ollama_timeout"]),
+            main_digits=int(cfg["ocr_main_digits"]),
+            decimal_digits=int(cfg["ocr_decimal_digits"]),
+            timeout=int(cfg["ollama_timeout"]),
             log=log,
         )
 
@@ -215,7 +251,7 @@ def process():
         set_phase("plausibility", "Prüfe Plausibilität …")
 
         # 4. Zustand laden (letzter Wert, Zeit, Fehlerzaehler)
-        state_path = Path(OPTS["last_value_path"])
+        state_path = Path(cfg["last_value_path"])
         state = plausibility.load_state(state_path, log)
         last_value = state["value"]
         last_timestamp = state["timestamp"]
@@ -227,13 +263,13 @@ def process():
         # 5. Plausibilitaetspruefung (nur wenn OCR ueberhaupt Ziffern lieferte)
         plausible = True
         reason = None
-        if not ocr_failed and OPTS.get("plausibility_check", True):
+        if not ocr_failed and cfg.get("plausibility_check", True):
             value = result["value"]
             plausible, reason = plausibility.check(
                 value=value,
                 last_value=last_value,
-                max_increase=float(OPTS["max_increase"]),
-                allow_equal=bool(OPTS["allow_equal"]),
+                max_increase=float(cfg["max_increase"]),
+                allow_equal=bool(cfg["allow_equal"]),
                 log=log,
             )
             result["plausible"] = plausible
@@ -245,7 +281,7 @@ def process():
 
         # Ein frischer, gueltiger Wert liegt vor, wenn OCR erfolgreich UND plausibel war
         valid = (not ocr_failed) and plausible
-        hold = bool(OPTS.get("hold_last_on_failure", True))
+        hold = bool(cfg.get("hold_last_on_failure", True))
 
         # 6. Durchflussrate + Status + Fehlerzaehler + Zustand aktualisieren
         if valid:
@@ -341,6 +377,7 @@ def set_value():
 
     Aufruf: /set_value?value=1265.500  (oder POST mit JSON {"value": 1265.5})
     """
+    cfg = get_config(log)
     # Wert aus Query-Parameter oder JSON-Body holen
     raw = request.args.get("value")
     if raw is None and request.is_json:
@@ -354,7 +391,7 @@ def set_value():
     except (TypeError, ValueError):
         return jsonify({"ok": False, "error": f"'{raw}' ist keine Zahl"}), 400
 
-    state_path = Path(OPTS["last_value_path"])
+    state_path = Path(cfg["last_value_path"])
     now = time.time()
     plausibility.save_state(state_path, {
         "value": value, "timestamp": now, "error_count": 0,
@@ -374,7 +411,8 @@ def index():
 @app.route("/tuner/dst.jpg", methods=["GET"])
 def tuner_dst():
     """Liefert das zuletzt zugeschnittene Ergebnisbild (fuer die Landing-Page)."""
-    dst = Path(OPTS["dst_path"])
+    cfg = get_config(log)
+    dst = Path(cfg["dst_path"])
     if not dst.exists():
         return "kein Ergebnisbild vorhanden", 404
     return send_file(str(dst), mimetype="image/jpeg")
@@ -383,7 +421,8 @@ def tuner_dst():
 @app.route("/status", methods=["GET"])
 def status_endpoint():
     """Live-Prozessstatus + letztes Ergebnis + Zustand fuer die Uebersicht."""
-    state = plausibility.load_state(Path(OPTS["last_value_path"]), log)
+    cfg = get_config(log)
+    state = plausibility.load_state(Path(cfg["last_value_path"]), log)
     running = PROCESS_STATE["running"]
     elapsed = None
     if PROCESS_STATE["started_at"]:
@@ -398,7 +437,7 @@ def status_endpoint():
         "stored_value": state["value"],
         "stored_timestamp": state["timestamp"],
         "error_count": state["error_count"],
-        "provider": OPTS.get("ocr_provider", "ollama_remote"),
+        "provider": cfg.get("ocr_provider", "ollama_remote"),
         "now": time.time(),
     })
 
@@ -412,16 +451,28 @@ def logs_endpoint():
 @app.route("/ollama_status", methods=["GET"])
 def ollama_status():
     """Prueft den aktiven OCR-Anbieter (Ollama erreichbar / Cloud-Key gesetzt)."""
+    cfg = get_config(log)
     import urllib.request
 
-    provider = OPTS.get("ocr_provider", "ollama_remote")
+    provider = cfg.get("ocr_provider", "ollama_remote")
+
+    if provider == "tesseract":
+        try:
+            import pytesseract
+            version = str(pytesseract.get_tesseract_version())
+            return jsonify({"provider": provider, "reachable": True,
+                            "model": f"Tesseract {version}", "model_present": True})
+        except Exception as exc:  # noqa: BLE001
+            return jsonify({"provider": provider, "reachable": False,
+                            "model": "Tesseract", "model_present": False,
+                            "error": str(exc)})
 
     if provider in ("ollama_local", "ollama_remote"):
-        base = OPTS["ollama_url"].replace("/api/generate", "")
+        base = cfg["ollama_url"].replace("/api/generate", "")
         if provider == "ollama_local":
             base = "http://127.0.0.1:11434"
         tags_url = f"{base}/api/tags"
-        model = OPTS["ollama_model"]
+        model = cfg["ollama_model"]
         try:
             with urllib.request.urlopen(tags_url, timeout=5) as resp:
                 data = json.loads(resp.read().decode("utf-8"))
@@ -443,14 +494,70 @@ def ollama_status():
         "claude": ("claude_api_key", "claude_model"),
     }
     keyname, modelname = key_map.get(provider, (None, None))
-    has_key = bool(OPTS.get(keyname, "")) if keyname else False
+    has_key = bool(cfg.get(keyname, "")) if keyname else False
     return jsonify({
         "provider": provider,
         "reachable": has_key,
-        "model": OPTS.get(modelname, "") if modelname else "",
+        "model": cfg.get(modelname, "") if modelname else "",
         "model_present": has_key,
         "error": None if has_key else "kein API-Schlüssel gesetzt",
     })
+
+
+@app.route("/settings", methods=["GET"])
+def settings_get():
+    """Aktuelle Einstellungen für das Konfigurationsformular.
+
+    API-Schlüssel werden nicht im Klartext zurückgegeben - nur ob einer
+    gesetzt ist (has_*_key). Das Formular zeigt dann ein Platzhalter-Feld;
+    ein leeres Feld beim Speichern lässt den bestehenden Schlüssel unangetastet.
+    """
+    cfg = get_config(log)
+    result = {k: cfg.get(k) for k in settings.SETTINGS_KEYS}
+    for key in settings.SECRET_KEYS:
+        result[f"has_{key}"] = bool(result.get(key))
+        result[key] = ""  # nie den echten Schlüssel ausliefern
+    return jsonify(result)
+
+
+@app.route("/settings", methods=["POST"])
+def settings_post():
+    """Speichert Einstellungen aus dem Konfigurationsformular.
+
+    Leere Felder bei API-Schlüsseln überschreiben einen bereits gesetzten
+    Schlüssel NICHT (so muss man ihn nicht bei jeder Änderung neu eingeben).
+    """
+    data = request.get_json(silent=True) or {}
+    current = settings.load(SETTINGS_PATH, log)
+
+    to_save = {}
+    for key in settings.SETTINGS_KEYS:
+        if key not in data:
+            continue
+        value = data[key]
+        if key in settings.SECRET_KEYS and (value is None or value == ""):
+            continue  # leeres Schlüsselfeld -> bestehenden Wert behalten
+        to_save[key] = value
+
+    try:
+        settings.save(SETTINGS_PATH, to_save, log)
+        return jsonify({"ok": True})
+    except Exception as exc:  # noqa: BLE001
+        log(f"FEHLER beim Speichern der Einstellungen: {exc}")
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.route("/system_info", methods=["GET"])
+def system_info():
+    """RAM-Info und Modellempfehlung für die Konfigurationsseite."""
+    return jsonify(sysinfo.get_recommendation(log))
+
+
+@app.route("/config", methods=["GET"])
+def config_page():
+    """Liefert die Konfigurations-Webseite."""
+    here = Path(__file__).parent / "config.html"
+    return here.read_text(encoding="utf-8"), 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
 @app.route("/tuner", methods=["GET"])
@@ -463,19 +570,21 @@ def tuner_page():
 @app.route("/tuner/current", methods=["GET"])
 def tuner_current():
     """Aktuelle effektive Rotations-/Zuschnittwerte (fuer das Formular)."""
-    eff = tuning.effective(OPTS, Path(OPTS["tuning_path"]), log)
+    cfg = get_config(log)
+    eff = tuning.effective(cfg, Path(cfg["tuning_path"]), log)
     # Sicherstellen, dass alle erwarteten Schluessel da sind
     for k in tuning.TUNABLE_KEYS:
-        eff.setdefault(k, OPTS.get(k))
+        eff.setdefault(k, cfg.get(k))
     return jsonify(eff)
 
 
 @app.route("/tuner/fetch_source", methods=["POST"])
 def tuner_fetch_source():
     """Holt ein frisches Kamerabild (mit Lampe) fuer den Tuner."""
-    raw_target = Path(OPTS["src_path"])
-    light_entity = OPTS.get("light_entity", "")
-    warmup = int(OPTS.get("light_warmup", 10))
+    cfg = get_config(log)
+    raw_target = Path(cfg["src_path"])
+    light_entity = cfg.get("light_entity", "")
+    warmup = int(cfg.get("light_warmup", 10))
     try:
         try:
             if light_entity:
@@ -483,9 +592,9 @@ def tuner_fetch_source():
                 if warmup > 0:
                     time.sleep(warmup)
             fetch_image.fetch_camera_image(
-                camera_entity=OPTS["camera_entity"],
+                camera_entity=cfg["camera_entity"],
                 dst_path=raw_target,
-                timeout=int(OPTS["ollama_timeout"]),
+                timeout=int(cfg["ollama_timeout"]),
                 log=log,
             )
         finally:
@@ -500,7 +609,8 @@ def tuner_fetch_source():
 @app.route("/tuner/source.jpg", methods=["GET"])
 def tuner_source():
     """Liefert das aktuelle Quellbild."""
-    src = Path(OPTS["src_path"])
+    cfg = get_config(log)
+    src = Path(cfg["src_path"])
     if not src.exists():
         return "kein Quellbild vorhanden", 404
     return send_file(str(src), mimetype="image/jpeg")
@@ -509,19 +619,20 @@ def tuner_source():
 @app.route("/tuner/preview.jpg", methods=["GET"])
 def tuner_preview():
     """Rendert eine Vorschau mit den uebergebenen Werten."""
-    src = Path(OPTS["src_path"])
+    cfg = get_config(log)
+    src = Path(cfg["src_path"])
     try:
         img = rotate.render(
             src_path=src,
-            angle=float(request.args.get("rotate_angle", OPTS["rotate_angle"])),
-            fill_color=request.args.get("fill_color", OPTS["fill_color"]),
-            crop_top=int(request.args.get("crop_top", OPTS["crop_top"])),
-            crop_bottom=int(request.args.get("crop_bottom", OPTS["crop_bottom"])),
-            crop_left=int(request.args.get("crop_left", OPTS["crop_left"])),
-            crop_right=int(request.args.get("crop_right", OPTS["crop_right"])),
+            angle=float(request.args.get("rotate_angle", cfg["rotate_angle"])),
+            fill_color=request.args.get("fill_color", cfg["fill_color"]),
+            crop_top=int(request.args.get("crop_top", cfg["crop_top"])),
+            crop_bottom=int(request.args.get("crop_bottom", cfg["crop_bottom"])),
+            crop_left=int(request.args.get("crop_left", cfg["crop_left"])),
+            crop_right=int(request.args.get("crop_right", cfg["crop_right"])),
             log=None,
         )
-        quality = int(request.args.get("jpeg_quality", OPTS["jpeg_quality"]))
+        quality = int(request.args.get("jpeg_quality", cfg["jpeg_quality"]))
         buf = io.BytesIO()
         img.save(buf, "JPEG", quality=quality)
         buf.seek(0)
@@ -535,9 +646,10 @@ def tuner_preview():
 @app.route("/tuner/save", methods=["POST"])
 def tuner_save():
     """Speichert die getunten Werte (ueberschreiben die Add-on-Konfig)."""
+    cfg = get_config(log)
     data = request.get_json(silent=True) or {}
     try:
-        tuning.save(Path(OPTS["tuning_path"]), data, log)
+        tuning.save(Path(cfg["tuning_path"]), data, log)
         return jsonify({"ok": True})
     except Exception as exc:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(exc)}), 500
@@ -546,14 +658,17 @@ def tuner_save():
 @app.route("/tuner/reset", methods=["POST"])
 def tuner_reset():
     """Loescht die getunten Werte (zurueck zur Add-on-Konfig)."""
-    tuning.clear(Path(OPTS["tuning_path"]), log)
+    cfg = get_config(log)
+    tuning.clear(Path(cfg["tuning_path"]), log)
     return jsonify({"ok": True})
 
 
 if __name__ == "__main__":
     log(f"Add-on gestartet, Python {sys.version.split()[0]}")
-    safe_opts = {k: v for k, v in OPTS.items()}
-    log(f"Optionen: {safe_opts}")
+    startup_cfg = get_config(log)
+    safe_cfg = {k: ("***" if k in settings.SECRET_KEYS and v else v)
+                for k, v in startup_cfg.items()}
+    log(f"Konfiguration: {safe_cfg}")
 
     # Die App lauscht auf zwei Ports:
     #  - 5000: HTTP-API (wird von der Integration / REST-Sensor genutzt)

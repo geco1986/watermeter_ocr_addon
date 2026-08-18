@@ -3,11 +3,38 @@
 # Bei ocr_provider=ollama_local wird Ollama beim ersten Start heruntergeladen
 # (persistent in /data), gestartet und das Modell geladen. Sonst wird die App
 # direkt gestartet - dann ist kein Ollama-Download noetig.
+#
+# Die Einstellungen kommen aus /data/settings.json (Konfiguration-Webseite).
+# Falls die Datei noch nicht existiert (frischer Start nach einem Update von
+# einer alten Version), wird als Fallback die alte /data/options.json
+# gelesen - die eigentliche Migration in settings.json macht dann app.py.
 
 set -e
 
+SETTINGS=/data/settings.json
 OPTIONS=/data/options.json
-PROVIDER=$(python3 -c "import json;print(json.load(open('$OPTIONS')).get('ocr_provider','ollama_remote'))" 2>/dev/null || echo "ollama_remote")
+
+get_value() {
+  # Liest key aus settings.json, sonst aus options.json, sonst Default.
+  key="$1"; default="$2"
+  python3 -c "
+import json
+
+def load(p):
+    try:
+        with open(p) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+s = load('$SETTINGS')
+o = load('$OPTIONS')
+v = s.get('$key', o.get('$key', '$default'))
+print(v)
+" 2>/dev/null || echo "$default"
+}
+
+PROVIDER=$(get_value ocr_provider ollama_remote)
 
 if [ "$PROVIDER" = "ollama_local" ]; then
   echo "[run] ocr_provider=ollama_local"
@@ -59,7 +86,7 @@ if [ "$PROVIDER" = "ollama_local" ]; then
   fi
 
   if [ -x "$OLLAMA_BIN" ]; then
-    MODEL=$(python3 -c "import json;print(json.load(open('$OPTIONS')).get('ollama_model','moondream'))" 2>/dev/null || echo "moondream")
+    MODEL=$(get_value ollama_model moondream)
     export OLLAMA_HOST=127.0.0.1:11434
     export OLLAMA_KV_CACHE_TYPE=f16
     export OLLAMA_FLASH_ATTENTION=0

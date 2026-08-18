@@ -249,10 +249,39 @@ def _claude(image_path, opts, main_digits, decimal_digits, timeout, log):
 
 
 # ---------------------------------------------------------------------------
+# Tesseract (lokale klassische OCR, kein KI-Modell noetig)
+# ---------------------------------------------------------------------------
+
+def _tesseract(image_path, opts, main_digits, decimal_digits, timeout, log):
+    try:
+        import pytesseract
+        from PIL import Image, ImageOps
+    except ImportError as exc:
+        return {"raw_digits": None, "error": f"Tesseract nicht verfügbar: {exc}"}
+
+    log("Lese Bild mit Tesseract (lokale OCR, kein KI-Modell) ...")
+    try:
+        img = Image.open(image_path).convert("L")
+        # Hochskalieren hilft Tesseract bei kleinen Zaehlerausschnitten
+        img = img.resize((img.width * 3, img.height * 3), Image.LANCZOS)
+        img = ImageOps.autocontrast(img)
+        # Harter Schwellenwert (Schwarz/Weiss) - bringt bei gestanzten
+        # Ziffern oft mehr als reines Scharfzeichnen.
+        img = img.point(lambda x: 255 if x > 140 else 0)
+        config = "--psm 7 -c tessedit_char_whitelist=0123456789"
+        text = pytesseract.image_to_string(img, config=config)
+    except Exception as exc:  # noqa: BLE001
+        return {"raw_digits": None, "error": f"Tesseract-Fehler: {exc}"}
+
+    return _finalize(text, main_digits, decimal_digits, log)
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
 
 PROVIDERS = {
+    "tesseract": _tesseract,
     "ollama_local": _ollama,
     "ollama_remote": _ollama,
     "openai": _openai,

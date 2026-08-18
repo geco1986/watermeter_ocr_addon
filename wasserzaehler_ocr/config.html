@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<base href="./">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wasserzähler OCR – Konfiguration</title>
+<style>
+  :root { --bg:#0f1419; --card:#1a2129; --fg:#e6edf3; --muted:#8b98a5;
+          --accent:#1a6fc4; --accent2:#2f81f7; --ok:#2ea043; --warn:#e23b3b; --amber:#d29922; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg);
+         font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:760px; margin:0 auto; padding:20px; }
+  header { display:flex; align-items:center; gap:14px; margin-bottom:10px; }
+  .drop { width:36px; height:36px; flex:none; }
+  h1 { margin:0; font-size:19px; }
+  .sub { color:var(--muted); font-size:13px; margin-top:2px; }
+  nav { display:flex; gap:8px; margin:14px 0 20px; }
+  nav a { color:var(--muted); text-decoration:none; font-size:13px; padding:6px 12px;
+          border-radius:999px; border:1px solid #2a3441; }
+  nav a.active, nav a:hover { color:#fff; border-color:var(--accent2); background:#16202c; }
+  .card { background:var(--card); border:1px solid #2a3441; border-radius:12px; padding:18px; margin-bottom:16px; }
+  .card h2 { margin:0 0 4px; font-size:14px; color:var(--fg); }
+  .card .desc { color:var(--muted); font-size:12px; margin-bottom:14px; }
+  label { display:block; font-size:13px; margin:12px 0 5px; color:var(--fg); }
+  label .hint { color:var(--muted); font-weight:normal; }
+  input[type=text], input[type=number], input[type=password], select {
+        width:100%; background:#0d1117; color:var(--fg); border:1px solid #2a3441;
+        border-radius:6px; padding:9px 10px; font-size:14px; }
+  input[type=checkbox] { width:16px; height:16px; vertical-align:middle; margin-right:8px; }
+  .checkrow { display:flex; align-items:center; margin:12px 0; font-size:14px; }
+  .provider-fields { border-left:2px solid #2a3441; padding-left:14px; margin-top:14px; display:none; }
+  .provider-fields.show { display:block; }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:560px){ .row2 { grid-template-columns:1fr; } }
+  button { background:var(--accent); color:#fff; border:0; border-radius:8px;
+          padding:11px 18px; font-size:14px; cursor:pointer; }
+  button:hover { background:var(--accent2); }
+  button.ghost { background:transparent; border:1px solid #2a3441; color:var(--fg); }
+  .status { font-size:13px; margin-top:12px; min-height:18px; }
+  .status.ok { color:var(--ok); } .status.err { color:var(--warn); }
+  .ramwrap { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  .rambar { flex:1; min-width:160px; height:10px; border-radius:999px; background:#0d1117;
+            border:1px solid #2a3441; overflow:hidden; }
+  .rambar-fill { height:100%; background:var(--accent2); }
+  .modeltable { width:100%; border-collapse:collapse; font-size:13px; margin-top:12px; }
+  .modeltable th, .modeltable td { text-align:left; padding:8px 6px; border-bottom:1px solid #222c36; }
+  .modeltable th { color:var(--muted); font-weight:normal; font-size:12px; }
+  .fits { color:var(--ok); } .nofits { color:var(--muted); }
+  .usebtn { font-size:12px; padding:5px 10px; }
+  .note { font-size:12px; color:var(--muted); margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <svg class="drop" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+      <path d="M128 40 L70 120 a62 62 0 1 0 116 0 Z" fill="#1a6fc4"/>
+      <rect x="86" y="132" width="26" height="34" fill="#fff"/>
+      <rect x="116" y="132" width="26" height="34" fill="#fff"/>
+      <rect x="146" y="132" width="26" height="34" fill="#e23b3b"/>
+    </svg>
+    <div><h1>Konfiguration</h1><div class="sub">Alle Einstellungen – wirken sofort, kein Neustart nötig</div></div>
+  </header>
+  <nav>
+    <a href=".">Übersicht</a>
+    <a href="config" class="active">Konfiguration</a>
+    <a href="tuner">Bild-Tuner</a>
+  </nav>
+
+  <div class="card">
+    <h2>Kamera &amp; Lampe</h2>
+    <div class="desc">Welche Home-Assistant-Entitäten für das Foto verwendet werden.</div>
+    <label>Kamera-Entität <span class="hint">z. B. camera.esp32_cam_esp32_kamera</span></label>
+    <input type="text" id="camera_entity">
+    <label>Lampen-Entität <span class="hint">optional – leer lassen, wenn keine geschaltet wird</span></label>
+    <input type="text" id="light_entity">
+    <label>Wartezeit nach Licht an (Sekunden)</label>
+    <input type="number" id="light_warmup" min="0" step="1">
+  </div>
+
+  <div class="card">
+    <h2>OCR-Anbieter</h2>
+    <div class="desc">Wer die Ziffern liest. Tesseract ist am einfachsten (kein Modell, aber schwächer bei
+      gewölbten Rollenzählwerken). Ollama liest lokal oder über einen eigenen Server. Cloud-Anbieter sind
+      meist am zuverlässigsten, kosten aber pro Anfrage und senden das Bild extern.</div>
+    <label>Anbieter</label>
+    <select id="ocr_provider">
+      <option value="tesseract">Tesseract – klassische OCR, lokal, kein Modell</option>
+      <option value="ollama_local">Ollama – im Add-on selbst (lokal)</option>
+      <option value="ollama_remote">Ollama – eigener Server (extern)</option>
+      <option value="openai">OpenAI (Cloud)</option>
+      <option value="gemini">Google Gemini (Cloud)</option>
+      <option value="claude">Anthropic Claude (Cloud)</option>
+    </select>
+
+    <div class="provider-fields" id="fields_tesseract">
+      <div class="note">Keine weiteren Einstellungen nötig. Tesseract läuft direkt im Add-on.</div>
+    </div>
+
+    <div class="provider-fields" id="fields_ollama_local">
+      <label>Modell <span class="hint">wird beim ersten Start automatisch geladen</span></label>
+      <input type="text" id="ollama_model_local" placeholder="z. B. qwen2.5vl:3b">
+      <div class="note">Läuft auf diesem Host (derselbe Rechner wie Home Assistant) –
+        die RAM-Empfehlung unten bezieht sich genau darauf.</div>
+    </div>
+
+    <div class="provider-fields" id="fields_ollama_remote">
+      <label>Server-URL <span class="hint">vollständig, inkl. /api/generate</span></label>
+      <input type="text" id="ollama_url" placeholder="http://192.168.3.50:11434/api/generate">
+      <label>Modell</label>
+      <input type="text" id="ollama_model_remote" placeholder="z. B. qwen2.5vl:7b">
+      <label>Timeout (Sekunden)</label>
+      <input type="number" id="ollama_timeout" min="5" step="5">
+    </div>
+
+    <div class="provider-fields" id="fields_openai">
+      <label>API-Schlüssel <span class="hint" id="openai_key_hint"></span></label>
+      <input type="password" id="openai_api_key" placeholder="sk-...">
+      <label>Modell</label>
+      <input type="text" id="openai_model" placeholder="gpt-4o-mini">
+    </div>
+
+    <div class="provider-fields" id="fields_gemini">
+      <label>API-Schlüssel <span class="hint" id="gemini_key_hint"></span></label>
+      <input type="password" id="gemini_api_key" placeholder="AIza...">
+      <label>Modell</label>
+      <input type="text" id="gemini_model" placeholder="gemini-2.0-flash">
+    </div>
+
+    <div class="provider-fields" id="fields_claude">
+      <label>API-Schlüssel <span class="hint" id="claude_key_hint"></span></label>
+      <input type="password" id="claude_api_key" placeholder="sk-ant-...">
+      <label>Modell</label>
+      <input type="text" id="claude_model" placeholder="claude-3-5-sonnet-20241022">
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Systemspeicher &amp; Modellempfehlung</h2>
+    <div class="desc">Bezieht sich auf diesen Host (relevant für „Ollama – im Add-on selbst“).</div>
+    <div class="ramwrap">
+      <div class="rambar"><div class="rambar-fill" id="rambar" style="width:0%"></div></div>
+      <span id="ramtext" class="hint">wird geladen…</span>
+    </div>
+    <table class="modeltable" id="modeltable"><tbody></tbody></table>
+    <div class="note" id="tesseract_note"></div>
+  </div>
+
+  <div class="card">
+    <h2>Ziffern des Zählwerks</h2>
+    <div class="row2">
+      <div>
+        <label>Hauptziffern (schwarz)</label>
+        <input type="number" id="ocr_main_digits" min="0" step="1">
+      </div>
+      <div>
+        <label>Nachkommaziffern (rot)</label>
+        <input type="number" id="ocr_decimal_digits" min="0" step="1">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Plausibilitätsprüfung</h2>
+    <div class="desc">Verhindert, dass ein OCR-Ausrutscher einen falschen Zählerstand einträgt.</div>
+    <div class="checkrow"><input type="checkbox" id="plausibility_check">
+      <span>Prüfung aktiv (neuer Wert muss zum letzten passen)</span></div>
+    <label>Maximaler Zuwachs pro Ablesung (m³)</label>
+    <input type="number" id="max_increase" min="0" step="0.1">
+    <div class="checkrow"><input type="checkbox" id="hold_last_on_failure">
+      <span>Bei Fehler/Unplausibilität letzten Wert halten (statt „unbekannt“)</span></div>
+  </div>
+
+  <div class="btns" style="display:flex; gap:10px;">
+    <button id="saveBtn">Speichern</button>
+    <button id="reloadBtn" class="ghost">Neu laden</button>
+  </div>
+  <div class="status" id="saveStatus"></div>
+</div>
+
+<script>
+const el = id => document.getElementById(id);
+const providers = ["tesseract","ollama_local","ollama_remote","openai","gemini","claude"];
+
+function showProviderFields(p) {
+  providers.forEach(x => el("fields_"+x).classList.toggle("show", x===p));
+}
+el("ocr_provider").addEventListener("change", e => showProviderFields(e.target.value));
+
+function loadSettings() {
+  fetch("settings").then(r=>r.json()).then(s => {
+    el("camera_entity").value = s.camera_entity || "";
+    el("light_entity").value = s.light_entity || "";
+    el("light_warmup").value = s.light_warmup;
+    el("ocr_provider").value = s.ocr_provider;
+    showProviderFields(s.ocr_provider);
+    el("ollama_model_local").value = s.ollama_model || "";
+    el("ollama_url").value = s.ollama_url || "";
+    el("ollama_model_remote").value = s.ollama_model || "";
+    el("ollama_timeout").value = s.ollama_timeout;
+    el("openai_model").value = s.openai_model || "";
+    el("gemini_model").value = s.gemini_model || "";
+    el("claude_model").value = s.claude_model || "";
+    el("openai_key_hint").textContent = s.has_openai_api_key ? "gesetzt – leer lassen, um zu behalten" : "noch nicht gesetzt";
+    el("gemini_key_hint").textContent = s.has_gemini_api_key ? "gesetzt – leer lassen, um zu behalten" : "noch nicht gesetzt";
+    el("claude_key_hint").textContent = s.has_claude_api_key ? "gesetzt – leer lassen, um zu behalten" : "noch nicht gesetzt";
+    el("ocr_main_digits").value = s.ocr_main_digits;
+    el("ocr_decimal_digits").value = s.ocr_decimal_digits;
+    el("plausibility_check").checked = !!s.plausibility_check;
+    el("max_increase").value = s.max_increase;
+    el("hold_last_on_failure").checked = !!s.hold_last_on_failure;
+  });
+}
+
+function loadSystemInfo() {
+  fetch("system_info").then(r=>r.json()).then(d => {
+    if (d.mem_total_gb) {
+      const pct = Math.min(100, Math.round((d.mem_total_gb - d.mem_available_gb) / d.mem_total_gb * 100));
+      el("rambar").style.width = pct + "%";
+      el("ramtext").textContent = d.mem_available_gb + " GB frei von " + d.mem_total_gb + " GB";
+    } else {
+      el("ramtext").textContent = d.error || "unbekannt";
+    }
+    const tbody = document.querySelector("#modeltable tbody");
+    tbody.innerHTML = "";
+    (d.table||[]).forEach(row => {
+      const tr = document.createElement("tr");
+      const btn = row.fits ? `<button class="usebtn ghost" data-model="${row.model}">übernehmen</button>` : "";
+      tr.innerHTML = `<td class="${row.fits?'fits':'nofits'}">${row.model}</td>
+        <td class="hint">${row.min_ram_gb} GB</td>
+        <td class="hint">${row.note}</td><td>${btn}</td>`;
+      tbody.appendChild(tr);
+    });
+    tbody.querySelectorAll("button[data-model]").forEach(b => {
+      b.addEventListener("click", () => {
+        el("ocr_provider").value = "ollama_local";
+        showProviderFields("ollama_local");
+        el("ollama_model_local").value = b.dataset.model;
+      });
+    });
+    el("tesseract_note").textContent = d.tesseract_note || "";
+  });
+}
+
+el("saveBtn").addEventListener("click", () => {
+  const provider = el("ocr_provider").value;
+  const payload = {
+    camera_entity: el("camera_entity").value.trim(),
+    light_entity: el("light_entity").value.trim(),
+    light_warmup: parseInt(el("light_warmup").value) || 0,
+    ocr_provider: provider,
+    ollama_url: el("ollama_url").value.trim(),
+    ollama_model: provider === "ollama_local" ? el("ollama_model_local").value.trim() : el("ollama_model_remote").value.trim(),
+    ollama_timeout: parseInt(el("ollama_timeout").value) || 120,
+    openai_api_key: el("openai_api_key").value,
+    openai_model: el("openai_model").value.trim(),
+    gemini_api_key: el("gemini_api_key").value,
+    gemini_model: el("gemini_model").value.trim(),
+    claude_api_key: el("claude_api_key").value,
+    claude_model: el("claude_model").value.trim(),
+    ocr_main_digits: parseInt(el("ocr_main_digits").value) || 0,
+    ocr_decimal_digits: parseInt(el("ocr_decimal_digits").value) || 0,
+    plausibility_check: el("plausibility_check").checked,
+    max_increase: parseFloat(el("max_increase").value) || 0,
+    hold_last_on_failure: el("hold_last_on_failure").checked,
+  };
+  const st = el("saveStatus"); st.className="status"; st.textContent="Speichere…";
+  fetch("settings", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)})
+    .then(r=>r.json()).then(d => {
+      if (d.ok) { st.className="status ok"; st.textContent="Gespeichert – wirkt sofort, kein Neustart nötig.";
+        el("openai_api_key").value=""; el("gemini_api_key").value=""; el("claude_api_key").value="";
+        loadSettings(); }
+      else { st.className="status err"; st.textContent="Fehler: "+(d.error||""); }
+    }).catch(e => { st.className="status err"; st.textContent="Fehler: "+e; });
+});
+el("reloadBtn").addEventListener("click", loadSettings);
+
+loadSettings();
+loadSystemInfo();
+</script>
+</body>
+</html>
