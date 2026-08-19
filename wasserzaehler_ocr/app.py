@@ -71,6 +71,8 @@ SETTINGS_DEFAULTS = {
     "ollama_url": "",
     "ollama_model": "moondream",
     "ollama_timeout": 120,
+    "ollama_num_thread": 0,
+    "ollama_local_cpu_percent": 0,
     "openai_api_key": "",
     "openai_model": "gpt-4o-mini",
     "gemini_api_key": "",

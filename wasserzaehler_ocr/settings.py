@@ -18,6 +18,8 @@ SETTINGS_KEYS = (
     "ollama_url",
     "ollama_model",
     "ollama_timeout",
+    "ollama_num_thread",
+    "ollama_local_cpu_percent",
     "openai_api_key",
     "openai_model",
     "gemini_api_key",

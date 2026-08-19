@@ -104,6 +104,12 @@
       <input type="text" id="ollama_model_local" placeholder="z. B. qwen2.5vl:3b">
       <div class="note">Läuft auf diesem Host (derselbe Rechner wie Home Assistant) –
         die RAM-Empfehlung unten bezieht sich genau darauf.</div>
+      <label>CPU-Threads pro Anfrage <span class="hint">0 = automatisch (Ollama entscheidet)</span></label>
+      <input type="number" id="ollama_num_thread_local" min="0" step="1">
+      <label>Maximale CPU-Auslastung <span class="hint">0 = unbegrenzt. 100% = 1 Kern voll, 400% = 4 Kerne voll</span></label>
+      <input type="number" id="ollama_local_cpu_percent" min="0" step="25">
+      <div class="note">Beide Regler bremsen die Erkennung, wenn sie zu eng gesetzt sind – gut zum
+        Schonen des Home-Assistant-Hosts, aber Ablesungen dauern dann länger.</div>
     </div>
 
     <div class="provider-fields" id="fields_ollama_remote">
@@ -113,6 +119,8 @@
       <input type="text" id="ollama_model_remote" placeholder="z. B. qwen2.5vl:7b">
       <label>Timeout (Sekunden)</label>
       <input type="number" id="ollama_timeout" min="5" step="5">
+      <label>CPU-Threads pro Anfrage <span class="hint">0 = automatisch. Wirkt auf dem externen Server.</span></label>
+      <input type="number" id="ollama_num_thread_remote" min="0" step="1">
     </div>
 
     <div class="provider-fields" id="fields_openai">
@@ -197,9 +205,12 @@ function loadSettings() {
     el("ocr_provider").value = s.ocr_provider;
     showProviderFields(s.ocr_provider);
     el("ollama_model_local").value = s.ollama_model || "";
+    el("ollama_num_thread_local").value = s.ollama_num_thread || 0;
+    el("ollama_local_cpu_percent").value = s.ollama_local_cpu_percent || 0;
     el("ollama_url").value = s.ollama_url || "";
     el("ollama_model_remote").value = s.ollama_model || "";
     el("ollama_timeout").value = s.ollama_timeout;
+    el("ollama_num_thread_remote").value = s.ollama_num_thread || 0;
     el("openai_model").value = s.openai_model || "";
     el("gemini_model").value = s.gemini_model || "";
     el("claude_model").value = s.claude_model || "";
@@ -254,6 +265,8 @@ el("saveBtn").addEventListener("click", () => {
     ollama_url: el("ollama_url").value.trim(),
     ollama_model: provider === "ollama_local" ? el("ollama_model_local").value.trim() : el("ollama_model_remote").value.trim(),
     ollama_timeout: parseInt(el("ollama_timeout").value) || 120,
+    ollama_num_thread: parseInt(provider === "ollama_local" ? el("ollama_num_thread_local").value : el("ollama_num_thread_remote").value) || 0,
+    ollama_local_cpu_percent: parseInt(el("ollama_local_cpu_percent").value) || 0,
     openai_api_key: el("openai_api_key").value,
     openai_model: el("openai_model").value.trim(),
     gemini_api_key: el("gemini_api_key").value,

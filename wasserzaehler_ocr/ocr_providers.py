@@ -85,17 +85,26 @@ def _ollama(image_path, opts, main_digits, decimal_digits, timeout, log):
     keep_alive = int(opts.get("ollama_keep_alive", 0))
     prompt = _build_prompt(main_digits, decimal_digits)
 
+    options = {"temperature": 0, "num_predict": 50, "keep_alive": keep_alive}
+    num_thread = int(opts.get("ollama_num_thread", 0) or 0)
+    if num_thread > 0:
+        # Begrenzt, wie viele CPU-Threads Ollama fuer DIESE Anfrage nutzt -
+        # funktioniert sowohl beim eingebauten als auch bei einem externen
+        # Ollama-Server, da es Teil der Anfrage selbst ist.
+        options["num_thread"] = num_thread
+
     payload = {
         "model": model,
         "prompt": prompt,
         "stream": False,
         "images": [_b64(image_path)],
-        "options": {"temperature": 0, "num_predict": 50, "keep_alive": keep_alive},
+        "options": options,
     }
     if bool(opts.get("ollama_force_json", True)):
         payload["format"] = "json"
 
-    log(f"Sende Bild an Ollama ({model}) ...")
+    log(f"Sende Bild an Ollama ({model}"
+        f"{f', num_thread={num_thread}' if num_thread > 0 else ''}) ...")
     try:
         resp = requests.post(url, json=payload, timeout=timeout)
     except requests.exceptions.Timeout:

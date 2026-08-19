@@ -87,12 +87,19 @@ if [ "$PROVIDER" = "ollama_local" ]; then
 
   if [ -x "$OLLAMA_BIN" ]; then
     MODEL=$(get_value ollama_model moondream)
+    CPU_PERCENT=$(get_value ollama_local_cpu_percent 0)
     export OLLAMA_HOST=127.0.0.1:11434
     export OLLAMA_KV_CACHE_TYPE=f16
     export OLLAMA_FLASH_ATTENTION=0
     export OLLAMA_MODELS=/data/ollama_models
     mkdir -p /data/ollama_models
-    "$OLLAMA_BIN" serve &
+
+    if [ "$CPU_PERCENT" != "0" ] && command -v cpulimit >/dev/null 2>&1; then
+      echo "[run] begrenze lokales Ollama auf ${CPU_PERCENT}% CPU (cpulimit, inkl. Kindprozesse)"
+      cpulimit -l "$CPU_PERCENT" -i -- "$OLLAMA_BIN" serve &
+    else
+      "$OLLAMA_BIN" serve &
+    fi
 
     echo "[run] warte auf Ollama ..."
     for i in $(seq 1 30); do

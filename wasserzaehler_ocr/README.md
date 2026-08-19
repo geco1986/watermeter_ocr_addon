@@ -208,3 +208,25 @@ Befüllung aus der Zeit vor diesem Update.
 Gespeichert werden nur kompakte Stunden- und Tages-Schnappschüsse (kein
 unbegrenzt wachsendes Rohdaten-Log), begrenzt auf 48 Stunden bzw. 400 Tage -
 das reicht für alle vier Ansichten und bleibt im Kilobyte-Bereich.
+
+## CPU-Auslastung von Ollama begrenzen (ab 5.3.0)
+
+Home Assistant bietet für Add-ons keine Möglichkeit, CPU-Kerne oder
+-Leistung in der Konfiguration zu begrenzen (das ist eine seit Jahren offene
+Anfrage an das Supervisor-Projekt). Das Add-on löst es stattdessen selbst,
+über zwei unabhängige Regler in der Konfigurationsseite:
+
+- **CPU-Threads pro Anfrage** (`ollama_num_thread`) – begrenzt, wie viele
+  CPU-Threads Ollama für eine einzelne Ablesung verwendet. Wirkt bei
+  **beiden** Ollama-Varianten (eingebaut und extern), da der Wert bei jeder
+  Anfrage mitgeschickt wird. 0 = Ollama entscheidet automatisch.
+- **Maximale CPU-Auslastung** (`ollama_local_cpu_percent`) – eine echte
+  Prozent-Drosselung (100% = ein Kern voll ausgelastet, 400% = vier Kerne).
+  Wirkt **nur beim eingebauten Ollama** (`ollama_local`), da dafür Zugriff
+  auf den laufenden Prozess nötig ist – bei einem externen Server lässt sich
+  das von hier aus nicht steuern. 0 = unbegrenzt.
+
+Beide Regler bremsen die Erkennung, wenn sie zu eng gesetzt werden – eine
+Ablesung dauert dann länger, dafür bleibt mehr Leistung für Home Assistant
+und andere Add-ons übrig. Sinnvoll auf Hosts, die neben diesem Add-on noch
+viel anderes laufen lassen.

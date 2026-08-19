@@ -1,6 +1,6 @@
 FROM python:3.11-slim
 
-LABEL io.hass.version="5.2.0" \
+LABEL io.hass.version="5.3.0" \
       io.hass.type="app" \
       io.hass.arch="amd64|aarch64"
 
@@ -8,9 +8,11 @@ LABEL io.hass.version="5.2.0" \
 #   ocr_provider=ollama_local, siehe run.sh).
 # tesseract-ocr: fuer den Anbieter "tesseract" (klassische, lokale OCR ohne
 #   KI-Modell - schnellste und genuegsamste Option, siehe README).
+# cpulimit: um die CPU-Auslastung des eingebauten Ollama zu begrenzen
+#   (ollama_local_cpu_percent in der Konfiguration).
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        curl ca-certificates tar zstd \
+        curl ca-certificates tar zstd cpulimit \
         tesseract-ocr tesseract-ocr-eng && \
     rm -rf /var/lib/apt/lists/*
 
