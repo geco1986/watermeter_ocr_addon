@@ -29,6 +29,7 @@ import tuning
 import settings
 import sysinfo
 import history
+import cpustats
 
 OPTIONS_PATH = Path("/data/options.json")
 SETTINGS_PATH = Path("/data/settings.json")
@@ -508,6 +509,25 @@ def ollama_status():
         "model_present": has_key,
         "error": None if has_key else "kein API-Schlüssel gesetzt",
     })
+
+
+@app.route("/cpu_stats", methods=["GET"])
+def cpu_stats():
+    """Kernanzahl + Pro-Kern-Auslastung, für die CPU-Seite."""
+    snap = cpustats.get_snapshot()
+    # zur Einordnung: die aktuell konfigurierten CPU-Regler mitliefern
+    cfg = get_config(log)
+    snap["configured_num_thread"] = cfg.get("ollama_num_thread", 0)
+    snap["configured_cpu_percent"] = cfg.get("ollama_local_cpu_percent", 0)
+    snap["ocr_provider"] = cfg.get("ocr_provider")
+    return jsonify(snap)
+
+
+@app.route("/cpu", methods=["GET"])
+def cpu_page():
+    """Liefert die CPU-Auslastungs-Seite (alle Kerne einzeln)."""
+    here = Path(__file__).parent / "cpu.html"
+    return here.read_text(encoding="utf-8"), 200, {"Content-Type": "text/html; charset=utf-8"}
 
 
 @app.route("/chart_data", methods=["GET"])

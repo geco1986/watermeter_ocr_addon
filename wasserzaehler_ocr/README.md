@@ -230,3 +230,18 @@ Beide Regler bremsen die Erkennung, wenn sie zu eng gesetzt werden – eine
 Ablesung dauert dann länger, dafür bleibt mehr Leistung für Home Assistant
 und andere Add-ons übrig. Sinnvoll auf Hosts, die neben diesem Add-on noch
 viel anderes laufen lassen.
+
+## CPU-Auslastung aller Kerne (ab 5.4.0)
+
+Neue Seite **„CPU-Auslastung"** (über die Navigation oben auf jeder Seite
+erreichbar) zeigt:
+
+- Wie viele CPU-Kerne dieser Host hat.
+- Die Auslastung **jedes einzelnen Kerns live** (aktualisiert sich jede
+  Sekunde) – anders als die Home-Assistant-Systemübersicht, die meist nur
+  einen einzelnen Gesamtwert zeigt.
+- Zur Einordnung: die aktuell eingestellten CPU-Regler (Threads pro Anfrage,
+  maximale Auslastung des eingebauten Ollama).
+
+Nützlich, um direkt zu sehen, ob eine OCR-Anfrage den Host wirklich stark
+auslastet und ob die CPU-Regler (siehe oben) etwas bewirken.
