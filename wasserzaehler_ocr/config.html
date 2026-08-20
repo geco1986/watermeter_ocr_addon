@@ -147,23 +147,6 @@
   </div>
 
   <div class="card">
-    <h2>KI-Prompt</h2>
-    <div class="desc">Die Anweisung, die an die KI geschickt wird (Ollama, OpenAI, Gemini, Claude –
-      <strong>nicht</strong> bei Tesseract, das nutzt keinen Text-Prompt). Verfügbare Platzhalter:
-      <code>{main}</code> (Anzahl schwarze Ziffern), <code>{decimal}</code> (Anzahl rote Ziffern),
-      <code>{total}</code> (Summe beider), <code>{example}</code> (Beispiel-Nullen in passender Länge).
-      Am besten die Struktur „antworte nur mit JSON {"raw_digits": "..."}" beibehalten – funktioniert
-      aber auch ohne, ein einfacher Ziffernstring wird ebenfalls erkannt.</div>
-    <textarea id="ocr_prompt" rows="8" style="width:100%;background:#0d1117;color:var(--fg);
-      border:1px solid #2a3441;border-radius:6px;padding:10px;font-size:13px;
-      font-family:ui-monospace,Menlo,Consolas,monospace;resize:vertical;"></textarea>
-    <div class="btns" style="margin-top:10px;display:flex;gap:10px;">
-      <button id="resetPromptBtn" class="ghost" type="button">Standard wiederherstellen</button>
-    </div>
-    <div class="status" id="promptStatus"></div>
-  </div>
-
-  <div class="card">
     <h2>Systemspeicher &amp; Modellempfehlung</h2>
     <div class="desc">Bezieht sich auf diesen Host (relevant für „Ollama – im Add-on selbst“).</div>
     <div class="ramwrap">
@@ -209,7 +192,6 @@
 <script>
 const el = id => document.getElementById(id);
 const providers = ["tesseract","ollama_local","ollama_remote","openai","gemini","claude"];
-let defaultPrompt = "";
 
 function showProviderFields(p) {
   providers.forEach(x => el("fields_"+x).classList.toggle("show", x===p));
@@ -241,8 +223,6 @@ function loadSettings() {
     el("plausibility_check").checked = !!s.plausibility_check;
     el("max_increase").value = s.max_increase;
     el("hold_last_on_failure").checked = !!s.hold_last_on_failure;
-    el("ocr_prompt").value = s.ocr_prompt || "";
-    defaultPrompt = s.default_ocr_prompt || "";
   });
 }
 
@@ -299,7 +279,6 @@ el("saveBtn").addEventListener("click", () => {
     plausibility_check: el("plausibility_check").checked,
     max_increase: parseFloat(el("max_increase").value) || 0,
     hold_last_on_failure: el("hold_last_on_failure").checked,
-    ocr_prompt: el("ocr_prompt").value,
   };
   const st = el("saveStatus"); st.className="status"; st.textContent="Speichere…";
   fetch("settings", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(payload)})
@@ -311,14 +290,6 @@ el("saveBtn").addEventListener("click", () => {
     }).catch(e => { st.className="status err"; st.textContent="Fehler: "+e; });
 });
 el("reloadBtn").addEventListener("click", loadSettings);
-
-el("resetPromptBtn").addEventListener("click", () => {
-  if (!defaultPrompt) return;
-  el("ocr_prompt").value = defaultPrompt;
-  const st = el("promptStatus");
-  st.className = "status ok";
-  st.textContent = "Standard eingesetzt – zum Übernehmen unten „Speichern" klicken.";
-});
 
 loadSettings();
 loadSystemInfo();

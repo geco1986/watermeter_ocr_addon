@@ -28,7 +28,6 @@ SETTINGS_KEYS = (
     "claude_model",
     "ocr_main_digits",
     "ocr_decimal_digits",
-    "ocr_prompt",
     "plausibility_check",
     "max_increase",
     "hold_last_on_failure",

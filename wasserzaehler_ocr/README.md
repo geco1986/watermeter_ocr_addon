@@ -245,22 +245,3 @@ erreichbar) zeigt:
 
 Nützlich, um direkt zu sehen, ob eine OCR-Anfrage den Host wirklich stark
 auslastet und ob die CPU-Regler (siehe oben) etwas bewirken.
-
-## Eigenen KI-Prompt verwenden (ab 5.5.0)
-
-In der Konfigurationsseite gibt es jetzt eine Karte **„KI-Prompt"** mit einem
-Textfeld für die Anweisung, die an die KI geschickt wird. Betrifft Ollama,
-OpenAI, Gemini und Claude – **nicht** Tesseract, das nutzt keinen Text-Prompt.
-
-Verfügbare Platzhalter: `{main}` (Anzahl schwarze Ziffern), `{decimal}`
-(Anzahl rote Ziffern), `{total}` (Summe), `{example}` (Beispiel-Nullen in
-passender Länge). Ein „Standard wiederherstellen"-Knopf setzt den
-mitgelieferten Prompt wieder ein.
-
-**Absicherung:** Ein fehlerhafter Prompt (z. B. ein Tippfehler in einem
-Platzhalter) wird beim Speichern sofort mit einer klaren Fehlermeldung
-abgelehnt und nicht übernommen – so kann eine falsche Eingabe nicht dazu
-führen, dass die Ablesung beim nächsten Lauf plötzlich scheitert. Die
-Antwort der KI wird weiterhin flexibel ausgewertet: sowohl reines JSON
-(`{"raw_digits": "..."}`) als auch ein einfacher Ziffernstring werden
-erkannt, die Prompt-Struktur ist also kein Muss, nur eine Empfehlung.

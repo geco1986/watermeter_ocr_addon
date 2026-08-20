@@ -82,7 +82,6 @@ SETTINGS_DEFAULTS = {
     "claude_model": "claude-3-5-sonnet-20241022",
     "ocr_main_digits": 5,
     "ocr_decimal_digits": 3,
-    "ocr_prompt": ocr_providers.DEFAULT_PROMPT_TEMPLATE,
     "plausibility_check": True,
     "max_increase": 5.0,
     "hold_last_on_failure": True,
@@ -552,9 +551,6 @@ def settings_get():
     for key in settings.SECRET_KEYS:
         result[f"has_{key}"] = bool(result.get(key))
         result[key] = ""  # nie den echten Schlüssel ausliefern
-    # Standard-Prompt separat mitliefern, damit die Konfigurationsseite einen
-    # "Standard wiederherstellen"-Knopf ohne eigene Kopie des Textes bauen kann.
-    result["default_ocr_prompt"] = ocr_providers.DEFAULT_PROMPT_TEMPLATE
     return jsonify(result)
 
 
@@ -576,24 +572,6 @@ def settings_post():
         if key in settings.SECRET_KEYS and (value is None or value == ""):
             continue  # leeres Schlüsselfeld -> bestehenden Wert behalten
         to_save[key] = value
-
-    # Eigenen Prompt vor dem Speichern testweise formatieren - ein Tippfehler
-    # in den Platzhaltern soll sofort auffallen, nicht erst beim naechsten
-    # Ablesevorgang.
-    if "ocr_prompt" in to_save:
-        raw = (to_save["ocr_prompt"] or "").strip()
-        if not raw:
-            to_save["ocr_prompt"] = ocr_providers.DEFAULT_PROMPT_TEMPLATE
-        else:
-            try:
-                raw.format(total=8, main=5, decimal=3, example="00000000")
-                to_save["ocr_prompt"] = raw
-            except (KeyError, IndexError, ValueError) as exc:
-                return jsonify({
-                    "ok": False,
-                    "error": (f"Prompt fehlerhaft: unbekannter Platzhalter {exc}. "
-                              f"Erlaubt sind nur {{total}}, {{main}}, {{decimal}}, {{example}}."),
-                }), 400
 
     try:
         settings.save(SETTINGS_PATH, to_save, log)
