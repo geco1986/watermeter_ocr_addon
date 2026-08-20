@@ -19,7 +19,7 @@ import re
 import requests
 
 
-PROMPT_TEMPLATE = (
+DEFAULT_PROMPT_TEMPLATE = (
     "You are a precise OCR system for reading water meters. "
     "The meter has exactly {main} main digits (black/white) and exactly "
     "{decimal} decimal digits (red). You must read all {total} digits from "
@@ -30,12 +30,21 @@ PROMPT_TEMPLATE = (
 )
 
 
-def _build_prompt(main_digits, decimal_digits):
+def _build_prompt(main_digits, decimal_digits, template=None, log=None):
+    """Baut den Prompt-Text. Nutzt einen eigenen Prompt, falls angegeben -
+    faellt bei einem fehlerhaften eigenen Prompt (z. B. Tippfehler in den
+    Platzhaltern) sicher auf den Standard-Prompt zurueck, statt die
+    Ablesung komplett scheitern zu lassen."""
     total = main_digits + decimal_digits
-    return PROMPT_TEMPLATE.format(
-        total=total, main=main_digits, decimal=decimal_digits,
-        example="0" * total,
-    )
+    fill = {"total": total, "main": main_digits, "decimal": decimal_digits,
+            "example": "0" * total}
+    tpl = template if template else DEFAULT_PROMPT_TEMPLATE
+    try:
+        return tpl.format(**fill)
+    except (KeyError, IndexError, ValueError) as exc:
+        if log:
+            log(f"WARNUNG: eigener Prompt fehlerhaft ({exc}) - nutze Standard-Prompt")
+        return DEFAULT_PROMPT_TEMPLATE.format(**fill)
 
 
 def _b64(image_path):
@@ -83,7 +92,7 @@ def _ollama(image_path, opts, main_digits, decimal_digits, timeout, log):
     url = opts["ollama_url"]
     model = opts["ollama_model"]
     keep_alive = int(opts.get("ollama_keep_alive", 0))
-    prompt = _build_prompt(main_digits, decimal_digits)
+    prompt = _build_prompt(main_digits, decimal_digits, opts.get("ocr_prompt"), log)
 
     options = {"temperature": 0, "num_predict": 50, "keep_alive": keep_alive}
     num_thread = int(opts.get("ollama_num_thread", 0) or 0)
@@ -137,7 +146,7 @@ def _openai(image_path, opts, main_digits, decimal_digits, timeout, log):
     if not api_key:
         return {"raw_digits": None, "error": "OpenAI: kein API-Schlüssel gesetzt"}
     model = opts.get("openai_model", "gpt-4o-mini")
-    prompt = _build_prompt(main_digits, decimal_digits)
+    prompt = _build_prompt(main_digits, decimal_digits, opts.get("ocr_prompt"), log)
     img = _b64(image_path)
 
     payload = {
@@ -182,7 +191,7 @@ def _gemini(image_path, opts, main_digits, decimal_digits, timeout, log):
     if not api_key:
         return {"raw_digits": None, "error": "Gemini: kein API-Schlüssel gesetzt"}
     model = opts.get("gemini_model", "gemini-2.0-flash")
-    prompt = _build_prompt(main_digits, decimal_digits)
+    prompt = _build_prompt(main_digits, decimal_digits, opts.get("ocr_prompt"), log)
     img = _b64(image_path)
 
     url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
@@ -220,7 +229,7 @@ def _claude(image_path, opts, main_digits, decimal_digits, timeout, log):
     if not api_key:
         return {"raw_digits": None, "error": "Claude: kein API-Schlüssel gesetzt"}
     model = opts.get("claude_model", "claude-3-5-sonnet-20241022")
-    prompt = _build_prompt(main_digits, decimal_digits)
+    prompt = _build_prompt(main_digits, decimal_digits, opts.get("ocr_prompt"), log)
     img = _b64(image_path)
 
     payload = {
